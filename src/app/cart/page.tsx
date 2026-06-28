@@ -393,11 +393,13 @@ export default function CartPage() {
               <h2 className="text-2xl font-semibold">Your cart is empty</h2>
 
               <Link
-                href="/store"
-                className="mt-6 inline-flex rounded-full bg-black px-8 py-4 text-sm font-semibold text-white"
-              >
-                Continue Shopping
-              </Link>
+  href="/store"
+  className="shimmer-btn mt-6 inline-flex rounded-full bg-black px-8 py-4 text-sm font-semibold text-white shadow-lg transition hover:scale-[1.02] hover:bg-neutral-900"
+>
+  <span className="relative z-10 text-white">
+    Continue Shopping
+  </span>
+</Link>
             </div>
           ) : (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
