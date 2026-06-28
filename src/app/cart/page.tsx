@@ -424,79 +424,81 @@ setCheckoutOpen(false);
                   const quantity = Number(item.quantity || 1);
 
                   return (
-                    <div
-                      key={item.id}
-                      className="grid gap-4 rounded-[1.75rem] bg-white p-4 shadow-sm sm:grid-cols-[120px_1fr] md:grid-cols-[140px_1fr_auto] md:rounded-[2rem]"
-                    >
-                      <div className="aspect-square overflow-hidden rounded-2xl bg-neutral-100">
-                        {item.imageUrl ? (
-                          <img
-                            src={item.imageUrl}
-                            alt={item.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-[#DDF2FF]">
-                            <ShoppingBag size={26} className="text-black/40" />
-                          </div>
-                        )}
-                      </div>
+                   <div
+  key={item.id}
+  className="relative rounded-[2rem] bg-white p-4 shadow-sm md:grid md:grid-cols-[180px_1fr_180px] md:gap-6 md:p-6"
+>
+  <div className="grid grid-cols-[115px_1fr] gap-4 md:contents">
+    <div className="aspect-square overflow-hidden rounded-[1.5rem] bg-neutral-100 md:h-[170px] md:w-[170px]">
+      {item.imageUrl ? (
+        <img
+          src={item.imageUrl}
+          alt={item.name}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-[#DDF2FF]">
+          <ShoppingBag size={26} className="text-black/40" />
+        </div>
+      )}
+    </div>
 
-                      <div className="min-w-0">
-                        <p className="truncate text-xs uppercase tracking-wide text-black/40">
-                          {item.category}
-                        </p>
+    <div className="min-w-0">
+      <p className="text-xs uppercase tracking-wide text-black/40">
+        {item.category}
+      </p>
 
-                        <h2 className="mt-1 break-words text-lg font-semibold sm:text-xl">
-                          {item.name}
-                        </h2>
+      <h2 className="mt-1 text-xl font-semibold leading-tight md:text-2xl">
+        {item.name}
+      </h2>
 
-                        <p className="mt-2 text-sm text-black/50">
-                          {item.ageRange || item.age} · {item.gender}
-                        </p>
+      <p className="mt-3 text-sm text-black/50 md:text-base">
+        {item.ageRange || item.age} · {item.gender}
+      </p>
 
-                        {item.shop && (
-                          <p className="mt-2 flex items-start gap-1 text-xs font-semibold text-black/45">
-                            <MapPin size={13} className="mt-0.5 shrink-0" />
-                            <span className="break-words">{item.shop.location}</span>
-                          </p>
-                        )}
+      {item.shop && (
+        <p className="mt-3 flex items-center gap-1 text-sm font-semibold text-black/45">
+          <MapPin size={15} />
+          {item.shop.location}
+        </p>
+      )}
 
-                        <button
-                          onClick={() => removeItem(item.id)}
-                          className="mt-4 flex items-center gap-2 text-sm font-semibold text-red-500"
-                        >
-                          <Trash2 size={16} />
-                          Remove
-                        </button>
-                      </div>
+      <button
+        onClick={() => removeItem(item.id)}
+        className="mt-5 flex items-center gap-2 text-sm font-semibold text-red-500 md:text-base"
+      >
+        <Trash2 size={17} />
+        Remove
+      </button>
+    </div>
+  </div>
 
-                      <div className="flex items-center justify-between gap-4 border-t border-black/10 pt-4 sm:col-span-2 md:col-span-1 md:flex-col md:items-end md:border-t-0 md:pt-0">
-                        <p className="text-lg font-semibold">
-                          GH₵{(price * quantity).toLocaleString()}
-                        </p>
+  <div className="mt-5 flex items-center justify-between border-t border-black/10 pt-4 md:mt-0 md:flex-col md:items-end md:border-t-0 md:pt-0">
+    <p className="text-xl font-bold md:text-2xl">
+      GH₵{(price * quantity).toLocaleString()}
+    </p>
 
-                        <div className="flex items-center gap-3 rounded-full bg-[#F8F5F0] p-1">
-                          <button
-                            onClick={() => decreaseQuantity(item.id)}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-white"
-                          >
-                            <Minus size={15} />
-                          </button>
+    <div className="flex items-center gap-4 rounded-full bg-[#F8F5F0] p-1.5">
+      <button
+        onClick={() => decreaseQuantity(item.id)}
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shadow-sm"
+      >
+        <Minus size={17} />
+      </button>
 
-                          <span className="w-6 text-center text-sm font-semibold">
-                            {quantity}
-                          </span>
+      <span className="w-6 text-center text-base font-bold">
+        {quantity}
+      </span>
 
-                          <button
-                            onClick={() => increaseQuantity(item.id)}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white"
-                          >
-                            <Plus size={15} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+      <button
+        onClick={() => increaseQuantity(item.id)}
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-black text-white shadow-sm"
+      >
+        <Plus size={18} />
+      </button>
+    </div>
+  </div>
+</div>
                   );
                 })}
               </div>
