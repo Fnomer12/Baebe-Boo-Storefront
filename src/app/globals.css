@@ -28,12 +28,27 @@ body {
 
 button,
 a,
-input {
+input,
+textarea,
+select {
   -webkit-tap-highlight-color: transparent;
 }
 
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
 img {
+  display: block;
   max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 .hero-gradient {
@@ -63,12 +78,58 @@ img {
   }
 }
 
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 @media (max-width: 640px) {
-  input {
+  body {
+    background:
+      radial-gradient(circle at top left, rgba(255, 234, 242, 0.75), transparent 22rem),
+      radial-gradient(circle at top right, rgba(221, 242, 255, 0.85), transparent 22rem),
+      var(--background);
+  }
+
+  input,
+  textarea,
+  select {
     font-size: 16px;
   }
 
   .hero-gradient {
-    border-radius: 2rem;
+    border-radius: 1.75rem;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+textarea {
+  font: inherit;
+}
+
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

@@ -129,51 +129,51 @@ export default function Home() {
     <main className="min-h-screen bg-[#F8F5F0] text-black">
       <Navbar cartCount={0} />
 
-      <section className="px-4 pb-20 pt-32 md:px-6">
-        <div className="mx-auto max-w-7xl space-y-12">
-          <section className="hero-gradient relative overflow-hidden rounded-[2.5rem] px-6 py-16 shadow-sm md:px-16 md:py-24">
-            <div className="absolute -left-16 top-10 h-72 w-72 rounded-full bg-[#FFEAF2]/80 blur-3xl" />
-            <div className="absolute -right-20 bottom-8 h-80 w-80 rounded-full bg-[#8DDCFF]/70 blur-3xl" />
+      <section className="px-3 pb-12 pt-24 sm:px-4 sm:pb-16 sm:pt-28 md:px-6 md:pt-32">
+        <div className="mx-auto w-full max-w-7xl space-y-8 sm:space-y-10 md:space-y-12">
+          <section className="hero-gradient relative overflow-hidden rounded-[1.75rem] px-4 py-12 shadow-sm sm:rounded-[2rem] sm:px-6 md:rounded-[2.5rem] md:px-16 md:py-24">
+            <div className="absolute -left-16 top-10 h-48 w-48 rounded-full bg-[#FFEAF2]/80 blur-3xl sm:h-72 sm:w-72" />
+            <div className="absolute -right-20 bottom-8 h-56 w-56 rounded-full bg-[#8DDCFF]/70 blur-3xl sm:h-80 sm:w-80" />
 
             <div className="relative mx-auto max-w-4xl text-center">
-              <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-white/80 shadow-sm backdrop-blur">
-                <Baby size={32} />
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-white/80 shadow-sm backdrop-blur sm:h-16 sm:w-16">
+                <Baby size={30} />
               </div>
 
-              <p className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-black/45">
+              <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-black/45 sm:text-sm sm:tracking-[0.25em]">
                 Premium Baby & Children Store
               </p>
 
-              <h1 className="text-4xl font-semibold leading-tight md:text-7xl">
+              <h1 className="text-[2.25rem] font-semibold leading-[1.05] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
                 Everything Your Little One Needs,
-                <br />
-                All In One Trusted Place
+                <br className="hidden sm:block" />
+                <span className="sm:ml-2">All In One Trusted Place</span>
               </h1>
 
-              <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-black/60 md:text-lg">
+              <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-black/60 sm:text-base md:text-lg md:leading-8">
                 Clothing, shoes, toys, feeding essentials, nursery items and
                 gifts carefully selected for babies and children.
               </p>
 
-             <div className="mt-9 flex justify-center">
-            <Link
-              href="/store"
-              className="inline-flex items-center justify-center rounded-full bg-black px-12 py-4 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-neutral-900"
-            >
-              Shop Now
-            </Link>
-          </div>
+              <div className="mt-8 flex justify-center">
+                <Link
+                  href="/store"
+                  className="inline-flex w-full max-w-xs items-center justify-center rounded-full bg-black px-10 py-4 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-neutral-900 sm:w-auto sm:max-w-none sm:px-12"
+                >
+                  Shop Now
+                </Link>
+              </div>
             </div>
           </section>
 
-          <section className="grid gap-3 rounded-[2rem] bg-white/80 p-4 shadow-sm backdrop-blur md:grid-cols-3 lg:grid-cols-6">
+          <section className="grid grid-cols-1 gap-3 rounded-[1.5rem] bg-white/80 p-3 shadow-sm backdrop-blur sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 lg:rounded-[2rem] lg:p-4">
             {trustItems.map((item) => (
               <div
                 key={item}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-[#F8F5F0] px-4 py-4 text-center text-sm font-medium"
+                className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#F8F5F0] px-4 py-3 text-center text-sm font-medium"
               >
-                <CheckCircle2 size={17} />
-                {item}
+                <CheckCircle2 size={17} className="shrink-0" />
+                <span>{item}</span>
               </div>
             ))}
           </section>
@@ -183,7 +183,7 @@ export default function Home() {
             <ProductSection title="New Arrivals" products={newArrivals} loading={loading} />
           </div>
 
-          <section className="rounded-[2rem] bg-white/80 p-6 shadow-sm backdrop-blur">
+          <section className="rounded-[1.75rem] bg-white/80 p-4 shadow-sm backdrop-blur sm:p-6 md:rounded-[2rem]">
             <SectionHeader label="Reviews" title="Trusted by Ghanaian Families" />
 
             <div className="grid gap-4 md:grid-cols-3">
@@ -210,19 +210,19 @@ export default function Home() {
           </section>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <section className="rounded-[2.5rem] bg-white/80 p-8 shadow-sm backdrop-blur">
-              <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-black/40">
+            <section className="rounded-[1.75rem] bg-white/80 p-4 shadow-sm backdrop-blur sm:p-6 md:rounded-[2.5rem] md:p-8">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-black/40 sm:text-sm sm:tracking-[0.2em]">
                 Visit Us
               </p>
 
-              <h2 className="text-3xl font-semibold">Find Our Store</h2>
+              <h2 className="text-2xl font-semibold sm:text-3xl">Find Our Store</h2>
 
-              <p className="mt-2 max-w-xl text-black/60">
+              <p className="mt-2 max-w-xl text-sm leading-7 text-black/60 sm:text-base">
                 Visit Baebe Boo for baby clothing, shoes, toys, gifts and
                 parenting essentials.
               </p>
 
-              <div className="mt-6 max-h-[420px] overflow-y-auto pr-2">
+              <div className="mt-6 max-h-[420px] overflow-y-auto pr-1 sm:pr-2">
                 <div className="space-y-3">
                   {shops.length === 0 ? (
                     <div className="rounded-3xl bg-[#F8F5F0] p-5 text-sm text-black/50">
@@ -232,15 +232,17 @@ export default function Home() {
                     shops.map((shop) => (
                       <div
                         key={shop.id}
-                        className="flex items-center gap-4 rounded-3xl border border-black/10 bg-[#F8F5F0] p-5"
+                        className="flex items-start gap-4 rounded-3xl border border-black/10 bg-[#F8F5F0] p-4 sm:items-center sm:p-5"
                       >
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-white">
-                          <MapPin size={22} />
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black text-white sm:h-12 sm:w-12">
+                          <MapPin size={21} />
                         </div>
 
-                        <div>
-                          <p className="font-semibold">{shop.name}</p>
-                          <p className="text-sm text-black/50">{shop.location}</p>
+                        <div className="min-w-0">
+                          <p className="break-words font-semibold">{shop.name}</p>
+                          <p className="break-words text-sm leading-6 text-black/50">
+                            {shop.location}
+                          </p>
                         </div>
                       </div>
                     ))
@@ -249,7 +251,7 @@ export default function Home() {
               </div>
             </section>
 
-            <section className="rounded-[2.5rem] bg-white/80 p-8 shadow-sm backdrop-blur">
+            <section className="rounded-[1.75rem] bg-white/80 p-4 shadow-sm backdrop-blur sm:p-6 md:rounded-[2.5rem] md:p-8">
               <SectionHeader label="Guides" title="Parenting Hub" />
 
               <div className="grid gap-3">
@@ -262,12 +264,12 @@ export default function Home() {
                       className="flex items-center gap-4 rounded-2xl bg-[#F8F5F0] p-4"
                     >
                       <div
-                        className={`flex h-12 w-12 items-center justify-center rounded-full ${post.bg}`}
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12 ${post.bg}`}
                       >
                         <Icon size={22} />
                       </div>
 
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-semibold">{post.title}</p>
                         <p className="text-sm text-black/50">{post.text}</p>
                       </div>
@@ -286,48 +288,24 @@ export default function Home() {
         href={whatsappUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105"
+        aria-label="Chat on WhatsApp"
+        className="fixed bottom-4 right-4 z-50 flex h-13 w-13 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105 sm:bottom-6 sm:right-6 sm:h-14 sm:w-14"
       >
         <MessageCircle size={26} />
       </a>
-
-      <style jsx>{`
-        .hero-gradient {
-          background: linear-gradient(
-            120deg,
-            #ffeaf2,
-            #ddf2ff,
-            #f3eaff,
-            #c7f0ff,
-            #ffeaf2
-          );
-          background-size: 400% 400%;
-          animation: baebeGradient 12s ease infinite;
-        }
-
-        @keyframes baebeGradient {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
-        }
-      `}</style>
     </main>
   );
 }
 
 function SectionHeader({ label, title }: { label: string; title: string }) {
   return (
-    <div className="mb-6">
-      <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-black/40">
+    <div className="mb-5 sm:mb-6">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-black/40 sm:text-sm sm:tracking-[0.2em]">
         {label}
       </p>
-      <h2 className="text-3xl font-semibold md:text-4xl">{title}</h2>
+      <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+        {title}
+      </h2>
     </div>
   );
 }
@@ -342,21 +320,24 @@ function ProductSection({
   loading: boolean;
 }) {
   return (
-    <section className="rounded-[2rem] bg-white/80 p-6 shadow-sm backdrop-blur">
-      <div className="mb-6 flex items-end justify-between gap-4">
+    <section className="rounded-[1.75rem] bg-white/80 p-4 shadow-sm backdrop-blur sm:p-6 md:rounded-[2rem]">
+      <div className="mb-6 flex items-start justify-between gap-4">
         <SectionHeader label="Featured" title={title} />
 
-        <Link href="/store" className="text-sm font-semibold text-blue-600">
+        <Link
+          href="/store"
+          className="shrink-0 pt-1 text-sm font-semibold text-blue-600"
+        >
           View All →
         </Link>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map((item) => (
             <div
               key={item}
-              className="h-48 animate-pulse rounded-2xl bg-[#F8F5F0]"
+              className="h-44 animate-pulse rounded-2xl bg-[#F8F5F0] sm:h-48"
             />
           ))}
         </div>
@@ -365,7 +346,7 @@ function ProductSection({
           No products available yet.
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
           {products.map((product) => (
             <Link
               href="/store"
@@ -388,8 +369,8 @@ function ProductSection({
                 )}
               </div>
 
-              <div className="p-4">
-                <p className="mb-1 text-[11px] uppercase tracking-wide text-black/40">
+              <div className="p-3 sm:p-4">
+                <p className="mb-1 truncate text-[10px] uppercase tracking-wide text-black/40 sm:text-[11px]">
                   {product.category}
                 </p>
                 <h3 className="line-clamp-2 text-sm font-semibold leading-5">
@@ -456,7 +437,7 @@ function MemberSection() {
   };
 
   return (
-    <section className="rounded-[2.5rem] bg-white/80 p-8 shadow-sm backdrop-blur">
+    <section className="rounded-[1.75rem] bg-white/80 p-4 shadow-sm backdrop-blur sm:p-6 md:rounded-[2.5rem] md:p-8">
       <SectionHeader label="Membership" title="Become a Member" />
 
       <p className="mb-6 max-w-2xl text-sm leading-7 text-black/60">
@@ -480,14 +461,14 @@ function MemberSection() {
           value={parentName}
           onChange={(e) => setParentName(e.target.value)}
           placeholder="Your full name"
-          className="h-14 rounded-full border border-black/10 bg-white px-5 outline-none"
+          className="h-14 w-full rounded-full border border-black/10 bg-white px-5 outline-none"
         />
 
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="Phone number"
-          className="h-14 rounded-full border border-black/10 bg-white px-5 outline-none"
+          className="h-14 w-full rounded-full border border-black/10 bg-white px-5 outline-none"
         />
 
         <input
@@ -495,7 +476,7 @@ function MemberSection() {
           type="email"
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email address"
-          className="h-14 rounded-full border border-black/10 bg-white px-5 outline-none"
+          className="h-14 w-full rounded-full border border-black/10 bg-white px-5 outline-none"
         />
 
         <div>
@@ -515,19 +496,19 @@ function MemberSection() {
           value={childFirstName}
           onChange={(e) => setChildFirstName(e.target.value)}
           placeholder="Child's first name"
-          className="h-14 rounded-full border border-black/10 bg-white px-5 outline-none"
+          className="h-14 w-full rounded-full border border-black/10 bg-white px-5 outline-none"
         />
 
         <input
           value={childLastName}
           onChange={(e) => setChildLastName(e.target.value)}
           placeholder="Child's last name"
-          className="h-14 rounded-full border border-black/10 bg-white px-5 outline-none"
+          className="h-14 w-full rounded-full border border-black/10 bg-white px-5 outline-none"
         />
 
         <button
           disabled={saving}
-          className="mt-2 h-14 rounded-full bg-black px-8 text-sm font-semibold text-white disabled:opacity-50 md:col-span-2"
+          className="mt-2 h-14 w-full rounded-full bg-black px-8 text-sm font-semibold text-white disabled:opacity-50 md:col-span-2"
         >
           {saving ? "Submitting..." : "Become a Member"}
         </button>

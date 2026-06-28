@@ -5,7 +5,6 @@ import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 import {
   Search,
-  X,
   ShoppingBag,
   Truck,
   CheckCircle2,
@@ -39,7 +38,8 @@ export default function TrackRecordsPage() {
   useEffect(() => {
     const mapOrder = (order: any): OrderRecord => ({
       id: order.id,
-      recordCode: order.record_code || `#BBS-${order.id.slice(0, 6).toUpperCase()}`,
+      recordCode:
+        order.record_code || `#BBS-${order.id.slice(0, 6).toUpperCase()}`,
       orderNumber: order.order_number || "",
       customerName: order.customer_name || "Customer",
       totalAmount: Number(order.total_amount || 0),
@@ -136,26 +136,30 @@ export default function TrackRecordsPage() {
     <main className="min-h-screen bg-[#F8F5F0] text-black">
       <Navbar cartCount={0} />
 
-      <section className="px-4 pb-20 pt-32 md:px-6">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+      <section className="px-3 pb-12 pt-24 sm:px-4 sm:pb-16 sm:pt-28 md:px-6 md:pt-32">
+        <div className="mx-auto w-full max-w-7xl">
+          <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-4xl font-semibold">Track Records</h1>
-              <p className="mt-2 text-sm text-black/50">
+              <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+                Track Records
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-black/50">
                 Track your completed orders, delivery destination and shipping status.
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
               <div
                 className={`flex h-14 items-center overflow-hidden rounded-full border border-black/10 bg-white shadow-sm transition-all duration-500 ${
-                  searchOpen ? "w-[360px] px-5" : "w-14 justify-center"
+                  searchOpen
+                    ? "w-full px-5 sm:w-[360px]"
+                    : "w-14 justify-center"
                 }`}
               >
                 <Search
                   size={22}
                   onClick={() => setSearchOpen(true)}
-                  className="cursor-pointer"
+                  className="shrink-0 cursor-pointer"
                 />
 
                 {searchOpen && (
@@ -167,7 +171,7 @@ export default function TrackRecordsPage() {
                       setPage(1);
                     }}
                     placeholder="Search record, order, name or address..."
-                    className="ml-3 w-full bg-transparent text-sm outline-none"
+                    className="ml-3 w-full min-w-0 bg-transparent text-sm outline-none"
                   />
                 )}
               </div>
@@ -195,7 +199,7 @@ export default function TrackRecordsPage() {
             </div>
           )}
 
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+          <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-black/50">
               Showing {shownOrders.length} of {filteredOrders.length} records
             </p>
@@ -229,33 +233,42 @@ export default function TrackRecordsPage() {
 }
 
 function TrackCard({ order }: { order: OrderRecord }) {
-  const shipped = order.shippingStatus === "shipped" || order.shippingStatus === "delivered";
+  const shipped =
+    order.shippingStatus === "shipped" || order.shippingStatus === "delivered";
   const delivered = order.shippingStatus === "delivered";
 
   return (
-    <div className="rounded-[2rem] border border-black/10 bg-white p-6 shadow-sm">
-      <div className="grid gap-6 xl:grid-cols-[320px_1fr_220px]">
-        <div>
-          <p className="text-2xl font-bold">{order.recordCode}</p>
-          <p className="mt-3 text-sm">
-            <span className="font-semibold">Order ID:</span> {order.orderNumber}
+    <div className="rounded-[1.75rem] border border-black/10 bg-white p-4 shadow-sm sm:p-6 md:rounded-[2rem]">
+      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_220px]">
+        <div className="min-w-0">
+          <p className="break-words text-2xl font-bold">{order.recordCode}</p>
+
+          <p className="mt-3 break-words text-sm">
+            <span className="font-semibold">Order ID:</span>{" "}
+            {order.orderNumber}
           </p>
+
+          <p className="mt-2 break-words text-sm">
+            <span className="font-semibold">Customer:</span>{" "}
+            {order.customerName}
+          </p>
+
           <p className="mt-2 text-sm">
-            <span className="font-semibold">Customer:</span> {order.customerName}
+            <span className="font-semibold">Total:</span>{" "}
+            GH₵{order.totalAmount.toLocaleString()}
           </p>
-          <p className="mt-2 text-sm">
-            <span className="font-semibold">Total:</span> GH₵{order.totalAmount.toLocaleString()}
+
+          <p className="mt-2 break-words text-sm leading-6 text-black/50">
+            {order.deliveryAddress || "No delivery address"}
           </p>
-          <p className="mt-2 text-sm text-black/50">
-            {order.deliveryAddress}
-          </p>
-          <p className="mt-1 text-xs font-semibold text-black/40">
+
+          <p className="mt-1 break-words text-xs font-semibold leading-5 text-black/40">
             Digital Address: {order.digitalAddress || "Not provided"}
           </p>
         </div>
 
-        <div className="flex items-center">
-          <div className="grid w-full grid-cols-3 items-start">
+        <div className="flex items-center overflow-x-auto pb-2 xl:overflow-visible xl:pb-0">
+          <div className="grid min-w-[520px] w-full grid-cols-3 items-start gap-3 sm:min-w-0">
             <Step
               active
               icon={ShoppingBag}
@@ -279,10 +292,10 @@ function TrackCard({ order }: { order: OrderRecord }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-center border-black/10 xl:border-l">
-          <div className="text-center">
+        <div className="flex items-center justify-start border-black/10 pt-2 xl:justify-center xl:border-l xl:pt-0">
+          <div className="text-left xl:text-center">
             <span
-              className={`rounded-full px-5 py-2 text-sm font-semibold ${
+              className={`inline-flex rounded-full px-5 py-2 text-sm font-semibold ${
                 delivered
                   ? "bg-green-100 text-green-600"
                   : shipped
@@ -293,9 +306,7 @@ function TrackCard({ order }: { order: OrderRecord }) {
               {delivered ? "Delivered" : shipped ? "Shipped" : "Received"}
             </span>
 
-            <p className="mt-4 text-xs text-black/45">
-              FIFO delivery queue
-            </p>
+            <p className="mt-4 text-xs text-black/45">FIFO delivery queue</p>
           </div>
         </div>
       </div>
@@ -327,14 +338,14 @@ function Step({
       </div>
 
       <p
-        className={`mt-3 text-sm font-semibold ${
+        className={`mt-3 text-xs font-semibold leading-5 sm:text-sm ${
           active ? "text-black" : "text-black/35"
         }`}
       >
         {title}
       </p>
 
-      <p className="mt-1 text-xs text-black/45">
+      <p className="mt-1 text-[11px] leading-4 text-black/45 sm:text-xs">
         {date ? new Date(date).toLocaleString() : "-"}
       </p>
     </div>

@@ -331,9 +331,7 @@ export default function CartPage() {
             setDeliveryAddress("");
             setPlacingOrder(false);
 
-            showMessage(
-              "Payment successful. Order sent to admin notifications."
-            );
+            showMessage("Payment successful. Order sent to admin notifications.");
           } catch (error: any) {
             setPlacingOrder(false);
             showMessage(error?.message || "Could not save order.");
@@ -356,28 +354,30 @@ export default function CartPage() {
       <Navbar cartCount={cartCount} />
 
       {message && (
-        <div className="fixed left-1/2 top-24 z-[90] w-[90%] max-w-md -translate-x-1/2 rounded-full bg-black px-5 py-3 text-center text-sm font-semibold text-white shadow-xl">
+        <div className="fixed left-1/2 top-20 z-[90] w-[92%] max-w-md -translate-x-1/2 rounded-3xl bg-black px-5 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-24 sm:rounded-full">
           {message}
         </div>
       )}
 
-      <section className="px-4 pb-20 pt-32 md:px-6">
-        <div className="mx-auto max-w-7xl">
+      <section className="px-3 pb-12 pt-24 sm:px-4 sm:pb-16 sm:pt-28 md:px-6 md:pt-32">
+        <div className="mx-auto w-full max-w-7xl">
           <div className="mb-8">
-            <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-black/40">
+            <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-black/40 sm:text-sm sm:tracking-[0.2em]">
               Shopping Cart
             </p>
 
-            <h1 className="text-4xl font-semibold md:text-6xl">Your Cart</h1>
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl md:text-6xl">
+              Your Cart
+            </h1>
 
-            <p className="mt-3 text-black/60">
+            <p className="mt-3 text-sm leading-7 text-black/60 sm:text-base">
               Review your selected items before checkout.
             </p>
 
             {selectedShop && (
-              <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-black/10 bg-white px-5 py-3 shadow-sm">
-                <MapPin size={18} />
-                <span className="text-sm font-semibold">
+              <div className="mt-5 inline-flex max-w-full items-start gap-3 rounded-3xl border border-black/10 bg-white px-4 py-3 shadow-sm sm:items-center sm:rounded-full sm:px-5">
+                <MapPin size={18} className="mt-0.5 shrink-0 sm:mt-0" />
+                <span className="break-words text-sm font-semibold">
                   Shopping from {selectedShop.location}
                 </span>
               </div>
@@ -385,7 +385,7 @@ export default function CartPage() {
           </div>
 
           {cartItems.length === 0 ? (
-            <div className="rounded-[2.5rem] bg-white p-12 text-center shadow-sm">
+            <div className="rounded-[1.75rem] bg-white p-8 text-center shadow-sm sm:p-12 md:rounded-[2.5rem]">
               <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#DDF2FF]">
                 <ShoppingBag size={30} />
               </div>
@@ -400,7 +400,7 @@ export default function CartPage() {
               </Link>
             </div>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
               <div className="space-y-4">
                 {cartItems.map((item) => {
                   const price = cleanPrice(item.price);
@@ -409,24 +409,28 @@ export default function CartPage() {
                   return (
                     <div
                       key={item.id}
-                      className="grid gap-4 rounded-[2rem] bg-white p-4 shadow-sm md:grid-cols-[140px_1fr_auto]"
+                      className="grid gap-4 rounded-[1.75rem] bg-white p-4 shadow-sm sm:grid-cols-[120px_1fr] md:grid-cols-[140px_1fr_auto] md:rounded-[2rem]"
                     >
                       <div className="aspect-square overflow-hidden rounded-2xl bg-neutral-100">
-                        {item.imageUrl && (
+                        {item.imageUrl ? (
                           <img
                             src={item.imageUrl}
                             alt={item.name}
                             className="h-full w-full object-cover"
                           />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-[#DDF2FF]">
+                            <ShoppingBag size={26} className="text-black/40" />
+                          </div>
                         )}
                       </div>
 
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-black/40">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs uppercase tracking-wide text-black/40">
                           {item.category}
                         </p>
 
-                        <h2 className="mt-1 text-xl font-semibold">
+                        <h2 className="mt-1 break-words text-lg font-semibold sm:text-xl">
                           {item.name}
                         </h2>
 
@@ -435,22 +439,22 @@ export default function CartPage() {
                         </p>
 
                         {item.shop && (
-                          <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-black/45">
-                            <MapPin size={13} />
-                            {item.shop.location}
+                          <p className="mt-2 flex items-start gap-1 text-xs font-semibold text-black/45">
+                            <MapPin size={13} className="mt-0.5 shrink-0" />
+                            <span className="break-words">{item.shop.location}</span>
                           </p>
                         )}
 
                         <button
                           onClick={() => removeItem(item.id)}
-                          className="mt-4 flex items-center gap-2 text-sm text-red-500"
+                          className="mt-4 flex items-center gap-2 text-sm font-semibold text-red-500"
                         >
                           <Trash2 size={16} />
                           Remove
                         </button>
                       </div>
 
-                      <div className="flex items-center justify-between gap-6 md:flex-col md:items-end">
+                      <div className="flex items-center justify-between gap-4 border-t border-black/10 pt-4 sm:col-span-2 md:col-span-1 md:flex-col md:items-end md:border-t-0 md:pt-0">
                         <p className="text-lg font-semibold">
                           GH₵{(price * quantity).toLocaleString()}
                         </p>
@@ -458,18 +462,18 @@ export default function CartPage() {
                         <div className="flex items-center gap-3 rounded-full bg-[#F8F5F0] p-1">
                           <button
                             onClick={() => decreaseQuantity(item.id)}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white"
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-white"
                           >
                             <Minus size={15} />
                           </button>
 
-                          <span className="w-5 text-center text-sm font-semibold">
+                          <span className="w-6 text-center text-sm font-semibold">
                             {quantity}
                           </span>
 
                           <button
                             onClick={() => increaseQuantity(item.id)}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white"
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white"
                           >
                             <Plus size={15} />
                           </button>
@@ -480,25 +484,25 @@ export default function CartPage() {
                 })}
               </div>
 
-              <aside className="h-fit rounded-[2.5rem] bg-white p-6 shadow-sm">
+              <aside className="h-fit rounded-[1.75rem] bg-white p-5 shadow-sm sm:p-6 md:rounded-[2.5rem] lg:sticky lg:top-28">
                 <h2 className="text-2xl font-semibold">Order Summary</h2>
 
                 {selectedShop && (
                   <div className="mt-5 rounded-3xl bg-[#F8F5F0] p-4">
-                    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
+                    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-black/40">
                       <MapPin size={14} />
                       Pickup Store
                     </p>
 
                     <p className="mt-2 font-semibold">{selectedShop.name}</p>
-                    <p className="text-sm text-black/50">
+                    <p className="text-sm leading-6 text-black/50">
                       {selectedShop.location}
                     </p>
                   </div>
                 )}
 
                 <div className="mt-6 space-y-4 text-sm">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-4">
                     <span className="text-black/50">Subtotal</span>
                     <span className="font-semibold">
                       GH₵{subtotal.toLocaleString()}
@@ -506,7 +510,7 @@ export default function CartPage() {
                   </div>
 
                   <div className="border-t border-black/10 pt-4">
-                    <div className="flex justify-between text-lg">
+                    <div className="flex justify-between gap-4 text-lg">
                       <span className="font-semibold">Total</span>
                       <span className="font-semibold">
                         GH₵{subtotal.toLocaleString()}
@@ -529,17 +533,17 @@ export default function CartPage() {
       </section>
 
       {checkoutOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-4 backdrop-blur-md">
-          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[2rem] border border-white/40 bg-white/80 p-6 shadow-2xl backdrop-blur-xl">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/35 px-3 py-3 backdrop-blur-md sm:items-center sm:px-4">
+          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[1.75rem] border border-white/40 bg-white/90 p-4 shadow-2xl backdrop-blur-xl sm:rounded-[2rem] sm:p-6">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/40 sm:tracking-[0.2em]">
                   Online Checkout
                 </p>
                 <h2 className="mt-1 text-2xl font-semibold">
                   Delivery Details
                 </h2>
-                <p className="mt-1 text-sm text-black/50">
+                <p className="mt-1 text-sm leading-6 text-black/50">
                   Pay online and your order will go to admin notifications.
                 </p>
               </div>
@@ -555,24 +559,16 @@ export default function CartPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="relative">
-                <User
-                  size={18}
-                  className="absolute left-5 top-1/2 -translate-y-1/2 text-black/40"
-                />
+              <InputIcon icon={<User size={18} />} input={
                 <input
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                   placeholder="Customer name"
                   className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
                 />
-              </div>
+              } />
 
-              <div className="relative">
-                <Mail
-                  size={18}
-                  className="absolute left-5 top-1/2 -translate-y-1/2 text-black/40"
-                />
+              <InputIcon icon={<Mail size={18} />} input={
                 <input
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
@@ -580,31 +576,24 @@ export default function CartPage() {
                   type="email"
                   className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
                 />
-              </div>
+              } />
 
-              <div className="relative">
-                <Phone
-                  size={18}
-                  className="absolute left-5 top-1/2 -translate-y-1/2 text-black/40"
-                />
+              <InputIcon icon={<Phone size={18} />} input={
                 <input
                   value={customerPhone}
                   onChange={(e) => handlePhoneChange(e.target.value)}
                   placeholder="+233 phone number"
                   className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
                 />
-              </div>
+              } />
 
               <div className="relative">
-                <Home
-                  size={18}
-                  className="absolute left-5 top-5 text-black/40"
-                />
+                <Home size={18} className="absolute left-5 top-5 text-black/40" />
                 <textarea
                   value={deliveryAddress}
                   onChange={(e) => setDeliveryAddress(e.target.value)}
                   placeholder="Delivery address"
-                  className="min-h-28 w-full rounded-3xl border border-black/10 bg-white/90 px-12 py-4 outline-none"
+                  className="min-h-28 w-full resize-none rounded-3xl border border-black/10 bg-white/90 px-12 py-4 outline-none"
                 />
               </div>
 
@@ -618,7 +607,7 @@ export default function CartPage() {
                   Paystack Online Payment
                 </div>
 
-                <div className="mt-5 flex justify-between border-t border-black/10 pt-4 text-lg font-bold">
+                <div className="mt-5 flex justify-between gap-4 border-t border-black/10 pt-4 text-lg font-bold">
                   <span>Total</span>
                   <span>GH₵{subtotal.toLocaleString()}</span>
                 </div>
@@ -636,5 +625,22 @@ export default function CartPage() {
         </div>
       )}
     </main>
+  );
+}
+
+function InputIcon({
+  icon,
+  input,
+}: {
+  icon: React.ReactNode;
+  input: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <div className="absolute left-5 top-1/2 -translate-y-1/2 text-black/40">
+        {icon}
+      </div>
+      {input}
+    </div>
   );
 }
