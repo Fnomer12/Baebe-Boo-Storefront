@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --breakpoint-xs: 420px;
+}
+
 :root {
   --background: #f8f5f0;
   --foreground: #050505;
@@ -41,9 +45,14 @@ select {
   font: inherit;
 }
 
-img {
+img,
+svg {
   display: block;
   max-width: 100%;
+}
+
+svg {
+  flex-shrink: 0;
 }
 
 a {
@@ -85,6 +94,22 @@ a {
   overflow: hidden;
 }
 
+.black-control {
+  background-color: #050505 !important;
+  color: #ffffff !important;
+}
+
+.black-control,
+.black-control span,
+.black-control p {
+  color: #ffffff !important;
+}
+
+.black-control svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
 @media (max-width: 640px) {
   body {
     background:
@@ -115,25 +140,51 @@ a {
   }
 }
 
-textarea {
-  font: inherit;
-}
-
-@media (max-width: 640px) {
-  input,
-  textarea,
-  select {
-    font-size: 16px;
-  }
-}
-
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+.shimmer-btn {
+  position: relative;
   overflow: hidden;
 }
 
-@theme {
-  --breakpoint-xs: 420px;
+.shimmer-btn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 80%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent
+  );
+  transform: skewX(-20deg);
+}
+
+.shimmer-btn:hover::before {
+  animation: shimmerMove 0.9s ease forwards;
+}
+
+@keyframes shimmerMove {
+  100% {
+    left: 140%;
+  }
+}
+
+input[type="date"] {
+  height: 3.5rem;
+  min-height: 3.5rem;
+  font-size: 14px;
+  line-height: 1;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  font-size: 14px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
 }

@@ -129,9 +129,9 @@ export default function Home() {
     <main className="min-h-screen bg-[#F8F5F0] text-black">
       <Navbar cartCount={0} />
 
-      <section className="px-3 pb-12 pt-24 sm:px-4 sm:pb-16 sm:pt-28 md:px-6 md:pt-32">
+      <section className="px-3 pb-12 pt-36 sm:px-4 sm:pb-16 sm:pt-36 md:px-6 md:pt-40">
         <div className="mx-auto w-full max-w-7xl space-y-8 sm:space-y-10 md:space-y-12">
-          <section className="hero-gradient relative overflow-hidden rounded-[1.75rem] px-4 py-12 shadow-sm sm:rounded-[2rem] sm:px-6 md:rounded-[2.5rem] md:px-16 md:py-24">
+          <section className="hero-gradient relative overflow-hidden rounded-[1.75rem] px-4 py-14 shadow-sm sm:rounded-[2rem] sm:px-8 sm:py-16 md:rounded-[2.5rem] md:px-16 md:py-24">
             <div className="absolute -left-16 top-10 h-48 w-48 rounded-full bg-[#FFEAF2]/80 blur-3xl sm:h-72 sm:w-72" />
             <div className="absolute -right-20 bottom-8 h-56 w-56 rounded-full bg-[#8DDCFF]/70 blur-3xl sm:h-80 sm:w-80" />
 
@@ -144,7 +144,7 @@ export default function Home() {
                 Premium Baby & Children Store
               </p>
 
-              <h1 className="text-[2.25rem] font-semibold leading-[1.05] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+              <h1 className="text-[2.45rem] font-semibold leading-[1.05] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
                 Everything Your Little One Needs,
                 <br className="hidden sm:block" />
                 <span className="sm:ml-2">All In One Trusted Place</span>
@@ -158,7 +158,11 @@ export default function Home() {
               <div className="mt-8 flex justify-center">
                 <Link
                   href="/store"
-                  className="inline-flex w-full max-w-xs items-center justify-center rounded-full bg-black px-10 py-4 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-neutral-900 sm:w-auto sm:max-w-none sm:px-12"
+                  style={{
+                    backgroundColor: "#050505",
+                    color: "#ffffff",
+                  }}
+                  className="inline-flex w-full max-w-xs items-center justify-center rounded-full px-10 py-4 text-sm font-semibold shadow-lg transition-all duration-300 hover:scale-105 sm:w-auto sm:max-w-none sm:px-12"
                 >
                   Shop Now
                 </Link>
@@ -179,8 +183,17 @@ export default function Home() {
           </section>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <ProductSection title="Best Sellers" products={bestSellers} loading={loading} />
-            <ProductSection title="New Arrivals" products={newArrivals} loading={loading} />
+            <ProductSection
+              title="Best Sellers"
+              products={bestSellers}
+              loading={loading}
+            />
+
+            <ProductSection
+              title="New Arrivals"
+              products={newArrivals}
+              loading={loading}
+            />
           </div>
 
           <section className="rounded-[1.75rem] bg-white/80 p-4 shadow-sm backdrop-blur sm:p-6 md:rounded-[2rem]">
@@ -203,7 +216,10 @@ export default function Home() {
                   </div>
 
                   <p className="text-sm leading-7 text-black/60">{review}</p>
-                  <p className="mt-4 text-sm font-semibold">Verified Customer</p>
+
+                  <p className="mt-4 text-sm font-semibold">
+                    Verified Customer
+                  </p>
                 </div>
               ))}
             </div>
@@ -215,7 +231,9 @@ export default function Home() {
                 Visit Us
               </p>
 
-              <h2 className="text-2xl font-semibold sm:text-3xl">Find Our Store</h2>
+              <h2 className="text-2xl font-semibold sm:text-3xl">
+                Find Our Store
+              </h2>
 
               <p className="mt-2 max-w-xl text-sm leading-7 text-black/60 sm:text-base">
                 Visit Baebe Boo for baby clothing, shoes, toys, gifts and
@@ -234,12 +252,20 @@ export default function Home() {
                         key={shop.id}
                         className="flex items-start gap-4 rounded-3xl border border-black/10 bg-[#F8F5F0] p-4 sm:items-center sm:p-5"
                       >
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black text-white sm:h-12 sm:w-12">
-                          <MapPin size={21} />
+                        <div
+                          style={{
+                            backgroundColor: "#050505",
+                            color: "#ffffff",
+                          }}
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12"
+                        >
+                          <MapPin size={21} color="#ffffff" />
                         </div>
 
                         <div className="min-w-0">
-                          <p className="break-words font-semibold">{shop.name}</p>
+                          <p className="break-words font-semibold">
+                            {shop.name}
+                          </p>
                           <p className="break-words text-sm leading-6 text-black/50">
                             {shop.location}
                           </p>
@@ -291,7 +317,7 @@ export default function Home() {
         aria-label="Chat on WhatsApp"
         className="fixed bottom-4 right-4 z-50 flex h-13 w-13 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105 sm:bottom-6 sm:right-6 sm:h-14 sm:w-14"
       >
-        <MessageCircle size={26} />
+        <MessageCircle size={26} color="#ffffff" />
       </a>
     </main>
   );
@@ -303,6 +329,7 @@ function SectionHeader({ label, title }: { label: string; title: string }) {
       <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-black/40 sm:text-sm sm:tracking-[0.2em]">
         {label}
       </p>
+
       <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
         {title}
       </h2>
@@ -373,10 +400,14 @@ function ProductSection({
                 <p className="mb-1 truncate text-[10px] uppercase tracking-wide text-black/40 sm:text-[11px]">
                   {product.category}
                 </p>
+
                 <h3 className="line-clamp-2 text-sm font-semibold leading-5">
                   {product.name}
                 </h3>
-                <p className="mt-2 text-sm font-semibold">GH₵{product.price}</p>
+
+                <p className="mt-2 text-sm font-semibold">
+                  GH₵{product.price}
+                </p>
               </div>
             </Link>
           ))}
@@ -402,7 +433,14 @@ function MemberSection() {
     setSuccess("");
     setError("");
 
-    if (!parentName || !childFirstName || !childLastName || !phone || !email || !childDob) {
+    if (
+      !parentName ||
+      !childFirstName ||
+      !childLastName ||
+      !phone ||
+      !email ||
+      !childDob
+    ) {
       setError("Please fill all fields.");
       return;
     }
@@ -441,7 +479,8 @@ function MemberSection() {
       <SectionHeader label="Membership" title="Become a Member" />
 
       <p className="mb-6 max-w-2xl text-sm leading-7 text-black/60">
-        Join Baebe Boo membership for special updates, child-focused offers and birthday surprises.
+        Join Baebe Boo membership for special updates, child-focused offers and
+        birthday surprises.
       </p>
 
       {error && (
@@ -479,18 +518,18 @@ function MemberSection() {
           className="h-14 w-full rounded-full border border-black/10 bg-white px-5 outline-none"
         />
 
-        <div>
-          <label className="mb-2 block text-sm font-semibold text-black">
-            Child&apos;s Date of Birth
-          </label>
+       <div className="w-full">
+  <label className="mb-2 block text-sm font-semibold text-black">
+    Child&apos;s Date of Birth
+  </label>
 
-          <input
-            value={childDob}
-            onChange={(e) => setChildDob(e.target.value)}
-            type="date"
-            className="h-14 w-full rounded-full border border-black/10 bg-white px-5 outline-none"
-          />
-        </div>
+  <input
+    value={childDob}
+    onChange={(e) => setChildDob(e.target.value)}
+    type="date"
+    className="h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm text-black/70 outline-none"
+  />
+</div>
 
         <input
           value={childFirstName}
@@ -508,7 +547,12 @@ function MemberSection() {
 
         <button
           disabled={saving}
-          className="mt-2 h-14 w-full rounded-full bg-black px-8 text-sm font-semibold text-white disabled:opacity-50 md:col-span-2"
+          type="submit"
+          style={{
+            backgroundColor: "#050505",
+            color: "#ffffff",
+          }}
+          className="mt-2 h-14 w-full rounded-full px-8 text-sm font-semibold disabled:opacity-50 md:col-span-2"
         >
           {saving ? "Submitting..." : "Become a Member"}
         </button>

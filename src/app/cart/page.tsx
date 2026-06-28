@@ -519,13 +519,15 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setCheckoutOpen(true)}
-                  disabled={placingOrder}
-                  className="mt-6 h-14 w-full rounded-full bg-black text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  Proceed to Checkout
-                </button>
+               <button
+  onClick={() => setCheckoutOpen(true)}
+  disabled={placingOrder}
+  className="shimmer-btn mt-6 h-14 w-full rounded-full bg-black text-sm font-semibold text-white shadow-lg transition hover:scale-[1.02] hover:bg-neutral-900 disabled:opacity-50"
+>
+  <span className="relative z-10 text-white">
+    Proceed to Checkout
+  </span>
+</button>
               </aside>
             </div>
           )}

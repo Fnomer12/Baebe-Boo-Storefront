@@ -144,7 +144,9 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
   }, []);
 
   useEffect(() => {
-    const handleScroll = () => setMinimized(window.scrollY > 40);
+    const handleScroll = () => {
+      setMinimized(window.scrollY > 40);
+    };
 
     handleScroll();
     window.addEventListener("scroll", handleScroll);
@@ -180,13 +182,16 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
     <>
       <header className="fixed left-0 top-0 z-50 w-full px-2 pt-2 sm:px-3 sm:pt-3 md:px-4 md:pt-4">
         <div
-          className={`mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/50 bg-white/40 shadow-lg shadow-black/5 backdrop-blur-2xl transition-all duration-500 ${
+          className={`mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/50 bg-white/50 shadow-lg shadow-black/5 backdrop-blur-2xl transition-all duration-500 ${
             minimized
               ? "h-14 px-2 sm:px-3 md:h-16 md:px-4"
               : "h-16 px-2 sm:h-[72px] sm:px-3 md:h-24 md:px-5"
           }`}
         >
-          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
+          <Link
+            href="/"
+            className="flex min-w-0 flex-1 items-center gap-2 md:gap-3"
+          >
             <div
               className={`relative shrink-0 overflow-hidden rounded-full border border-white/60 bg-white shadow-sm transition-all duration-500 ${
                 minimized
@@ -206,8 +211,8 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
             <div
               className={`min-w-0 [perspective:1200px] transition-all duration-500 ${
                 minimized
-                  ? "h-10 w-[92px] xs:w-[115px] sm:w-[150px] md:h-12 md:w-[190px]"
-                  : "h-11 w-[105px] xs:w-[135px] sm:h-12 sm:w-[180px] md:h-16 md:w-[260px]"
+                  ? "h-10 w-[115px] sm:w-[150px] md:h-12 md:w-[190px]"
+                  : "h-11 w-[135px] sm:h-12 sm:w-[180px] md:h-16 md:w-[260px]"
               }`}
             >
               <div
@@ -245,7 +250,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-3">
             <Link
               href="/store"
-              className={`hidden items-center rounded-full bg-white/60 px-4 text-xs font-semibold text-black shadow-sm backdrop-blur-xl transition hover:scale-105 sm:flex md:px-5 md:text-sm ${
+              className={`hidden items-center rounded-full bg-white/80 px-4 text-xs font-semibold text-black shadow-sm backdrop-blur-xl transition hover:scale-105 hover:bg-white sm:flex md:px-5 md:text-sm ${
                 minimized ? "h-9 md:h-10" : "h-10 md:h-12"
               }`}
             >
@@ -255,7 +260,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
             {showFilters && (
               <button
                 onClick={() => setFiltersOpen(true)}
-                className={`flex items-center justify-center gap-2 rounded-full bg-[#DDF2FF]/90 px-3 text-black shadow-sm backdrop-blur-xl transition hover:scale-105 md:px-4 ${
+                className={`flex items-center justify-center gap-2 rounded-full bg-[#DDF2FF]/95 px-3 text-black shadow-sm backdrop-blur-xl transition hover:scale-105 md:px-4 ${
                   minimized ? "h-9" : "h-10 md:h-12"
                 }`}
               >
@@ -268,20 +273,29 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
             <Link
               href="/cart"
-              className={`relative flex items-center justify-center rounded-full bg-black px-3 text-white transition hover:scale-105 md:px-4 ${
-                minimized ? "h-9" : "h-10 md:h-12"
+              aria-label="Cart"
+              className={`relative flex shrink-0 items-center justify-center overflow-visible rounded-full bg-black text-white shadow-sm transition-all duration-300 hover:scale-105 hover:bg-neutral-900 ${
+                minimized
+                  ? "h-10 w-12 md:h-11 md:w-14"
+                  : "h-11 w-14 md:h-12 md:w-16"
               }`}
             >
-              <ShoppingBag size={20} />
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#FFEAF2] px-1 text-xs font-semibold text-black">
+              <ShoppingBag
+                size={21}
+                strokeWidth={2}
+                className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-white"
+              />
+
+              <span className="absolute -right-1 -top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#FFEAF2] text-[11px] font-bold leading-none text-black shadow-md">
                 {liveCartCount}
               </span>
             </Link>
 
             <button
               onClick={() => setMenuOpen(true)}
-              className={`flex items-center justify-center rounded-full bg-white/70 px-3 text-black shadow-sm backdrop-blur-xl transition hover:scale-105 md:px-4 ${
-                minimized ? "h-9" : "h-10 md:h-12"
+              aria-label="Open menu"
+              className={`flex items-center justify-center rounded-full bg-white/80 px-3 text-black shadow-sm backdrop-blur-xl transition hover:scale-105 hover:bg-white md:px-4 ${
+                minimized ? "h-10 md:h-11" : "h-11 md:h-12"
               }`}
             >
               <Menu size={22} />
@@ -323,10 +337,33 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
         </div>
 
         <div className="space-y-3 px-5 py-6 sm:px-6">
-          <MenuLink href="/" icon={Home} label="Home" close={() => setMenuOpen(false)} />
-          <MenuLink href="/store" icon={Store} label="Store" close={() => setMenuOpen(false)} />
-          <MenuLink href="/cart" icon={ShoppingBag} label="Cart" close={() => setMenuOpen(false)} />
-          <MenuLink href="/track-records" icon={Truck} label="Track Records" close={() => setMenuOpen(false)} />
+          <MenuLink
+            href="/"
+            icon={Home}
+            label="Home"
+            close={() => setMenuOpen(false)}
+          />
+
+          <MenuLink
+            href="/store"
+            icon={Store}
+            label="Store"
+            close={() => setMenuOpen(false)}
+          />
+
+          <MenuLink
+            href="/cart"
+            icon={ShoppingBag}
+            label="Cart"
+            close={() => setMenuOpen(false)}
+          />
+
+          <MenuLink
+            href="/track-records"
+            icon={Truck}
+            label="Track Records"
+            close={() => setMenuOpen(false)}
+          />
 
           <a
             href="https://wa.me/233XXXXXXXXX"
@@ -356,7 +393,9 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-[#FDFBF8]/95 px-5 py-5 backdrop-blur-xl md:px-6">
             <div>
               <h2 className="text-xl font-semibold text-black">Filters</h2>
-              <p className="text-sm text-black/50">Find the perfect baby item</p>
+              <p className="text-sm text-black/50">
+                Find the perfect baby item
+              </p>
             </div>
 
             <button
@@ -418,10 +457,14 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                     >
                       <span className="flex min-w-0 items-center gap-3">
                         <Icon size={21} className="shrink-0" />
-                        <span className="truncate font-medium">{item.name}</span>
+                        <span className="truncate font-medium">
+                          {item.name}
+                        </span>
                       </span>
 
-                      {active && <span className="shrink-0 text-xs">Selected</span>}
+                      {active && (
+                        <span className="shrink-0 text-xs">Selected</span>
+                      )}
                     </button>
                   );
                 })}
@@ -464,9 +507,9 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
               <button
                 onClick={applyFilters}
-                className="h-14 rounded-full bg-black text-sm font-semibold text-white"
+                className="shimmer-hover h-14 rounded-full bg-black text-sm font-semibold text-white"
               >
-                Apply Filters
+                <span className="relative z-10 text-white">Apply Filters</span>
               </button>
             </div>
           </div>
@@ -491,7 +534,7 @@ function MenuLink({
     <Link
       href={href}
       onClick={close}
-      className="flex items-center gap-3 rounded-2xl bg-white px-5 py-4 font-semibold text-black shadow-sm"
+      className="flex items-center gap-3 rounded-2xl bg-white px-5 py-4 font-semibold text-black shadow-sm transition hover:bg-[#F8F5F0]"
     >
       <Icon size={21} />
       {label}
