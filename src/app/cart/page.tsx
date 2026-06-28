@@ -217,7 +217,11 @@ export default function CartPage() {
     return true;
   };
 
-  const savePaidOrder = async (paymentReference: string) => {
+ const savePaidOrder = async (
+  paymentReference: string,
+  cartSnapshot: CartItem[],
+  totalSnapshot: number
+) => {
     const orderNumber = `BB-${Date.now().toString().slice(-6)}`;
 
     const { data: order, error: orderError } = await supabase
@@ -228,7 +232,7 @@ export default function CartPage() {
         customer_email: customerEmail.trim(),
         customer_phone: customerPhone.trim(),
         delivery_address: deliveryAddress.trim(),
-        total_amount: subtotal,
+       total_amount: totalSnapshot,
         order_status: "paid",
         payment_method: "paystack",
         payment_reference: paymentReference,
@@ -243,7 +247,7 @@ export default function CartPage() {
       throw new Error(orderError.message);
     }
 
-    const orderRows = cartItems.map((item) => ({
+    const orderRows = cartSnapshot.map((item) => ({
       order_id: order.id,
       product_id: item.id,
       product_name: item.name,
@@ -261,6 +265,13 @@ export default function CartPage() {
 
   const createOnlineOrder = async () => {
     if (!validateCheckout()) return;
+
+    const cartSnapshot = [...cartItems];
+const totalSnapshot = subtotal;
+
+// Immediately clear the cart
+updateCart([]);
+setCheckoutOpen(false);
 
     try {
       setPlacingOrder(true);
@@ -306,9 +317,9 @@ export default function CartPage() {
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
-                reference,
-                amount: subtotal,
-              }),
+  reference,
+  amount: totalSnapshot,
+}),
             });
 
             const verifyData = await verifyRes.json();
@@ -321,7 +332,11 @@ export default function CartPage() {
               return;
             }
 
-            await savePaidOrder(reference);
+           await savePaidOrder(
+  reference,
+  cartSnapshot,
+  totalSnapshot
+);
 
             updateCart([]);
             setCheckoutOpen(false);
