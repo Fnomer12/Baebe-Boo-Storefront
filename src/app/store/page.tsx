@@ -328,12 +328,7 @@ export default function StorePage() {
               )}
             </div>
 
-            <Link
-              href="/"
-              className="inline-flex w-fit shrink-0 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black shadow-sm transition hover:bg-black hover:text-white"
-            >
-              &lt; Back
-            </Link>
+           
           </div>
 
           <div className="mb-8 flex w-full max-w-md items-center gap-3 rounded-full bg-white px-5 py-3 shadow-sm">

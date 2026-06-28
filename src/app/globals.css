@@ -133,3 +133,7 @@ textarea {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+@theme {
+  --breakpoint-xs: 420px;
+}

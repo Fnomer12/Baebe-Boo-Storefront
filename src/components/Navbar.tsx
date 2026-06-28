@@ -178,20 +178,20 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
   return (
     <>
-      <header className="fixed left-0 top-0 z-50 w-full px-3 pt-3 md:px-4 md:pt-4">
+      <header className="fixed left-0 top-0 z-50 w-full px-2 pt-2 sm:px-3 sm:pt-3 md:px-4 md:pt-4">
         <div
-          className={`mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/50 bg-white/35 shadow-lg shadow-black/5 backdrop-blur-2xl transition-all duration-500 ${
+          className={`mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/50 bg-white/40 shadow-lg shadow-black/5 backdrop-blur-2xl transition-all duration-500 ${
             minimized
-              ? "h-14 px-3 md:h-16 md:px-4"
-              : "h-[72px] px-3 md:h-24 md:px-5"
+              ? "h-14 px-2 sm:px-3 md:h-16 md:px-4"
+              : "h-16 px-2 sm:h-[72px] sm:px-3 md:h-24 md:px-5"
           }`}
         >
-          <Link href="/" className="flex min-w-0 items-center gap-2 md:gap-3">
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
             <div
               className={`relative shrink-0 overflow-hidden rounded-full border border-white/60 bg-white shadow-sm transition-all duration-500 ${
                 minimized
                   ? "h-10 w-10 md:h-11 md:w-11"
-                  : "h-12 w-12 md:h-16 md:w-16"
+                  : "h-11 w-11 sm:h-12 sm:w-12 md:h-16 md:w-16"
               }`}
             >
               <Image
@@ -204,10 +204,10 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
             </div>
 
             <div
-              className={`[perspective:1200px] transition-all duration-500 ${
+              className={`min-w-0 [perspective:1200px] transition-all duration-500 ${
                 minimized
-                  ? "h-10 w-[115px] sm:w-[150px] md:h-12 md:w-[190px]"
-                  : "h-12 w-[135px] sm:w-[180px] md:h-16 md:w-[260px]"
+                  ? "h-10 w-[92px] xs:w-[115px] sm:w-[150px] md:h-12 md:w-[190px]"
+                  : "h-11 w-[105px] xs:w-[135px] sm:h-12 sm:w-[180px] md:h-16 md:w-[260px]"
               }`}
             >
               <div
@@ -215,24 +215,24 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                   flipped ? "[transform:rotateX(-180deg)]" : ""
                 }`}
               >
-                <div className="absolute inset-0 flex items-center [backface-visibility:hidden]">
+                <div className="absolute inset-0 flex items-center overflow-hidden [backface-visibility:hidden]">
                   <h1
-                    className={`${cormorant.className} whitespace-nowrap font-semibold tracking-tight text-black transition-all duration-500 ${
+                    className={`${cormorant.className} truncate whitespace-nowrap font-semibold tracking-tight text-black transition-all duration-500 ${
                       minimized
-                        ? "text-2xl sm:text-3xl md:text-4xl"
-                        : "text-3xl sm:text-4xl md:text-5xl"
+                        ? "text-[1.45rem] sm:text-3xl md:text-4xl"
+                        : "text-[1.7rem] sm:text-4xl md:text-5xl"
                     }`}
                   >
                     Baebe Boo
                   </h1>
                 </div>
 
-                <div className="absolute inset-0 flex items-center [transform:rotateX(180deg)] [backface-visibility:hidden]">
+                <div className="absolute inset-0 flex items-center overflow-hidden [transform:rotateX(180deg)] [backface-visibility:hidden]">
                   <h1
-                    className={`${cormorant.className} whitespace-nowrap font-semibold tracking-tight text-black transition-all duration-500 ${
+                    className={`${cormorant.className} truncate whitespace-nowrap font-semibold tracking-tight text-black transition-all duration-500 ${
                       minimized
-                        ? "text-2xl sm:text-3xl md:text-4xl"
-                        : "text-3xl sm:text-4xl md:text-5xl"
+                        ? "text-[1.45rem] sm:text-3xl md:text-4xl"
+                        : "text-[1.7rem] sm:text-4xl md:text-5xl"
                     }`}
                   >
                     Storefront
@@ -242,7 +242,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
             </div>
           </Link>
 
-          <div className="flex shrink-0 items-center gap-2 md:gap-3">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-3">
             <Link
               href="/store"
               className={`hidden items-center rounded-full bg-white/60 px-4 text-xs font-semibold text-black shadow-sm backdrop-blur-xl transition hover:scale-105 sm:flex md:px-5 md:text-sm ${
@@ -259,7 +259,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                   minimized ? "h-9" : "h-10 md:h-12"
                 }`}
               >
-                <SlidersHorizontal size={20} />
+                <SlidersHorizontal size={19} />
                 <span className="hidden text-xs font-semibold md:inline md:text-sm">
                   Filter
                 </span>
@@ -272,7 +272,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                 minimized ? "h-9" : "h-10 md:h-12"
               }`}
             >
-              <ShoppingBag size={21} />
+              <ShoppingBag size={20} />
               <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#FFEAF2] px-1 text-xs font-semibold text-black">
                 {liveCartCount}
               </span>
@@ -284,14 +284,14 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                 minimized ? "h-9" : "h-10 md:h-12"
               }`}
             >
-              <Menu size={23} />
+              <Menu size={22} />
             </button>
           </div>
         </div>
       </header>
 
       {cartMessage && (
-        <div className="fixed left-1/2 top-24 z-[90] w-[90%] max-w-md -translate-x-1/2 rounded-full bg-black px-5 py-3 text-center text-sm font-semibold text-white shadow-xl">
+        <div className="fixed left-1/2 top-20 z-[90] w-[92%] max-w-md -translate-x-1/2 rounded-3xl bg-black px-5 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-24 sm:rounded-full">
           {cartMessage}
         </div>
       )}
@@ -308,7 +308,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
           menuOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-black/10 px-6 py-5">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-[#FDFBF8]/95 px-5 py-5 backdrop-blur-xl sm:px-6">
           <div>
             <h2 className="text-xl font-semibold">Menu</h2>
             <p className="text-sm text-black/50">Baebe Boo navigation</p>
@@ -322,7 +322,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
           </button>
         </div>
 
-        <div className="space-y-3 px-6 py-6">
+        <div className="space-y-3 px-5 py-6 sm:px-6">
           <MenuLink href="/" icon={Home} label="Home" close={() => setMenuOpen(false)} />
           <MenuLink href="/store" icon={Store} label="Store" close={() => setMenuOpen(false)} />
           <MenuLink href="/cart" icon={ShoppingBag} label="Cart" close={() => setMenuOpen(false)} />
@@ -353,7 +353,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
             filtersOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-[#FDFBF8]/90 px-5 py-5 backdrop-blur-xl md:px-6">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-[#FDFBF8]/95 px-5 py-5 backdrop-blur-xl md:px-6">
             <div>
               <h2 className="text-xl font-semibold text-black">Filters</h2>
               <p className="text-sm text-black/50">Find the perfect baby item</p>
@@ -382,14 +382,14 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                     <button
                       key={item.name}
                       onClick={() => setSelectedGender(item.name)}
-                      className={`flex items-center gap-3 rounded-2xl border px-4 py-4 text-left transition ${
+                      className={`flex min-w-0 items-center gap-3 rounded-2xl border px-4 py-4 text-left transition ${
                         active
                           ? "border-black bg-[#DDF2FF] text-black"
                           : "border-black/10 bg-white text-black/60"
                       }`}
                     >
-                      <Icon size={22} />
-                      <span className="font-medium">{item.name}</span>
+                      <Icon size={21} className="shrink-0" />
+                      <span className="truncate font-medium">{item.name}</span>
                     </button>
                   );
                 })}
@@ -410,18 +410,18 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                     <button
                       key={item.name}
                       onClick={() => setSelectedCategory(item.name)}
-                      className={`flex w-full items-center justify-between rounded-2xl border px-4 py-4 transition ${
+                      className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-4 transition ${
                         active
                           ? "border-black bg-black text-white"
                           : "border-black/10 bg-white text-black"
                       }`}
                     >
-                      <span className="flex items-center gap-3">
-                        <Icon size={22} />
-                        <span className="font-medium">{item.name}</span>
+                      <span className="flex min-w-0 items-center gap-3">
+                        <Icon size={21} className="shrink-0" />
+                        <span className="truncate font-medium">{item.name}</span>
                       </span>
 
-                      {active && <span className="text-xs">Selected</span>}
+                      {active && <span className="shrink-0 text-xs">Selected</span>}
                     </button>
                   );
                 })}
@@ -454,7 +454,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 border-t border-black/10 pt-6">
+            <div className="sticky bottom-0 grid grid-cols-2 gap-3 border-t border-black/10 bg-[#FDFBF8]/95 py-4 backdrop-blur-xl">
               <button
                 onClick={clearFilters}
                 className="h-14 rounded-full border border-black/10 bg-white text-sm font-semibold text-black"
