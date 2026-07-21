@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Navbar from "@/components/Navbar";
-import { supabase } from "@/lib/supabase";
 import {
-  Search,
   ShoppingBag,
   Truck,
   CheckCircle2,
@@ -29,14 +27,43 @@ type OrderRecord = {
 
 export default function TrackRecordsPage() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [orderNumber, setOrderNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
 
   const pageSize = 10;
 
-  useEffect(() => {
-    const mapOrder = (order: any): OrderRecord => ({
+  const lookupOrder = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/orders/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderNumber, email }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setOrders([]);
+        setError(result.message || "Order not found.");
+        return;
+      }
+
+      setOrders(result.orders || []);
+      setPage(1);
+    } catch {
+      setError("Could not look up the order.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const mapOrder = (order: any): OrderRecord => ({
       id: order.id,
       recordCode:
         order.record_code || `#BBS-${order.id.slice(0, 6).toUpperCase()}`,
@@ -52,72 +79,9 @@ export default function TrackRecordsPage() {
       deliveredAt: order.delivered_at,
     });
 
-    const fetchOrders = async () => {
-      const { data, error } = await supabase
-        .from("orders")
-        .select(`
-          id,
-          record_code,
-          order_number,
-          customer_name,
-          total_amount,
-          delivery_address,
-          digital_address,
-          order_status,
-          shipping_status,
-          shipped_at,
-          delivered_at,
-          created_at
-        `)
-        .eq("order_status", "completed")
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        console.error(error.message);
-        return;
-      }
-
-      setOrders((data || []).map(mapOrder));
-    };
-
-    fetchOrders();
-
-    const channel = supabase
-      .channel("track-records-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        fetchOrders
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
   const filteredOrders = useMemo(() => {
-    const value = search.toLowerCase().trim();
-
-    if (!value) return orders;
-
-    return orders.filter((order) =>
-      [
-        order.recordCode,
-        order.orderNumber,
-        order.customerName,
-        order.deliveryAddress,
-        order.digitalAddress,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(value)
-    );
-  }, [orders, search]);
+    return orders.map(mapOrder);
+  }, [orders]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
 
@@ -125,12 +89,6 @@ export default function TrackRecordsPage() {
     (page - 1) * pageSize,
     page * pageSize
   );
-
-  const clearSearch = () => {
-    setSearch("");
-    setSearchOpen(false);
-    setPage(1);
-  };
 
   return (
     <main className="min-h-screen bg-[#F8F5F0] text-black">
@@ -144,48 +102,18 @@ export default function TrackRecordsPage() {
                 Track Records
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-black/50">
-                Track your completed orders, delivery destination and shipping status.
+                Enter your order number and checkout email to view delivery status.
               </p>
             </div>
 
-            <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-              <div
-                className={`flex h-14 items-center overflow-hidden rounded-full border border-black/10 bg-white shadow-sm transition-all duration-500 ${
-                  searchOpen
-                    ? "w-full px-5 sm:w-[360px]"
-                    : "w-14 justify-center"
-                }`}
-              >
-                <Search
-                  size={22}
-                  onClick={() => setSearchOpen(true)}
-                  className="shrink-0 cursor-pointer"
-                />
-
-                {searchOpen && (
-                  <input
-                    autoFocus
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(1);
-                    }}
-                    placeholder="Search record, order, name or address..."
-                    className="ml-3 w-full min-w-0 bg-transparent text-sm outline-none"
-                  />
-                )}
-              </div>
-
-              {searchOpen && (
-                <button
-                  onClick={clearSearch}
-                  className="h-14 rounded-full border border-red-200 bg-white px-6 text-sm font-semibold text-red-500"
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
+            <form onSubmit={lookupOrder} className="grid w-full gap-3 sm:grid-cols-[1fr_1fr_auto] lg:w-auto">
+              <input value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder="Order number" className="h-14 rounded-full border border-black/10 bg-white px-5 text-sm outline-none" required />
+              <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="Checkout email" className="h-14 rounded-full border border-black/10 bg-white px-5 text-sm outline-none" required />
+              <button disabled={loading} className="h-14 rounded-full bg-black px-6 text-sm font-semibold text-white disabled:opacity-50">{loading ? "Looking up..." : "Track order"}</button>
+            </form>
           </div>
+
+          {error && <div className="mb-6 rounded-3xl bg-red-50 p-4 text-sm font-semibold text-red-600">{error}</div>}
 
           {shownOrders.length === 0 ? (
             <div className="rounded-3xl border border-black/10 bg-white p-8 text-sm text-black/50">

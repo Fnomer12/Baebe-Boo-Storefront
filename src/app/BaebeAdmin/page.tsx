@@ -208,16 +208,24 @@ const [completedOrderItems, setCompletedOrderItems] = useState<CompletedOrderIte
   useEffect(() => {
     const verifyAccess = async () => {
       try {
-        const isAuthed = sessionStorage.getItem("baebe_admin_auth");
-        const role = sessionStorage.getItem("baebe_admin_role");
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-        if (isAuthed !== "true") {
+        if (!session?.access_token) {
           router.replace("/BaebeAdmin/login");
           return;
         }
 
-        if (role !== "boss") {
-          router.replace("/BaebeCounter");
+        const response = await fetch("/api/auth/admin", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (!response.ok) {
+          router.replace("/BaebeAdmin/login");
           return;
         }
 

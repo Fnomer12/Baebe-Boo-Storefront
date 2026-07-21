@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 function GoogleIcon() {
   return (
@@ -16,17 +16,21 @@ function GoogleIcon() {
 }
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
 
-    // Temporary working redirect until Supabase Google OAuth is connected.
-    sessionStorage.setItem("baebe_admin_auth", "true");
-    sessionStorage.setItem("baebe_admin_role", "boss");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/BaebeAdmin`,
+      },
+    });
 
-    router.push("/BaebeAdmin");
+    if (error) {
+      setLoading(false);
+    }
   };
 
   return (

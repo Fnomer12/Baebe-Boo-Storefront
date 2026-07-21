@@ -448,13 +448,13 @@ function MemberSection() {
     try {
       setSaving(true);
 
-      const { error } = await supabase.from("members").insert({
-        parent_name: parentName.trim(),
-        child_first_name: childFirstName.trim(),
-        child_last_name: childLastName.trim(),
-        phone: phone.trim(),
-        email: email.trim(),
-        child_date_of_birth: childDob,
+      const { error } = await supabase.rpc("register_member", {
+        p_parent_name: parentName.trim(),
+        p_child_first_name: childFirstName.trim(),
+        p_child_last_name: childLastName.trim(),
+        p_phone: phone.trim(),
+        p_email: email.trim(),
+        p_child_date_of_birth: childDob,
       });
 
       if (error) {

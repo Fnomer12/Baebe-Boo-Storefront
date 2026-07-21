@@ -4,22 +4,6 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ShieldCheck } from "lucide-react";
 
-type Shop = {
-  id: string;
-  name: string;
-  location: string;
-  database_name: string;
-  is_active: boolean;
-};
-
-type StaffRow = {
-  id: string;
-  staff_name: string;
-  staff_code: string;
-  shop_id: string;
-  shops: Shop | Shop[] | null;
-};
-
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 48 48" className="h-5 w-5">
@@ -46,55 +30,7 @@ export default function CounterLoginPage() {
       return;
     }
 
-    const { data, error: staffError } = await supabase
-      .from("shop_staff")
-      .select(`
-        id,
-        staff_name,
-        staff_code,
-        shop_id,
-        shops (
-          id,
-          name,
-          location,
-          database_name,
-          is_active
-        )
-      `)
-      .eq("staff_code", cleanCode)
-      .maybeSingle();
-
-    if (staffError) {
-      setError(staffError.message);
-      return;
-    }
-
-    const staff = data as StaffRow | null;
-
-    if (!staff) {
-      setError("Invalid unique counter ID.");
-      return;
-    }
-
-    const shop = Array.isArray(staff.shops) ? staff.shops[0] : staff.shops;
-
-    if (!shop) {
-      setError("This counter ID has not been assigned to a shop.");
-      return;
-    }
-
-    if (!shop.is_active) {
-      setError("Assigned shop is inactive.");
-      return;
-    }
-
-    sessionStorage.setItem("baebe_pending_counter_staff_id", staff.id);
-    sessionStorage.setItem("baebe_pending_counter_staff_name", staff.staff_name);
-    sessionStorage.setItem("baebe_pending_counter_staff_code", staff.staff_code);
-    sessionStorage.setItem("baebe_pending_counter_shop_id", shop.id);
-    sessionStorage.setItem("baebe_pending_counter_shop_name", shop.name);
-    sessionStorage.setItem("baebe_pending_counter_shop_location", shop.location);
-    sessionStorage.setItem("baebe_pending_counter_shop", JSON.stringify(shop));
+    sessionStorage.setItem("baebe_pending_counter_staff_code", cleanCode);
 
     setLoading(true);
 

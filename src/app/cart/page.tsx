@@ -209,6 +209,11 @@ export default function CartPage() {
       return false;
     }
 
+    if (!selectedShop?.id) {
+      showMessage("Select a shop location before checkout.");
+      return false;
+    }
+
     if (subtotal <= 0) {
       showMessage("Invalid cart total.");
       return false;
@@ -217,61 +222,10 @@ export default function CartPage() {
     return true;
   };
 
- const savePaidOrder = async (
-  paymentReference: string,
-  cartSnapshot: CartItem[],
-  totalSnapshot: number
-) => {
-    const orderNumber = `BB-${Date.now().toString().slice(-6)}`;
-
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .insert({
-        order_number: orderNumber,
-        customer_name: customerName.trim(),
-        customer_email: customerEmail.trim(),
-        customer_phone: customerPhone.trim(),
-        delivery_address: deliveryAddress.trim(),
-       total_amount: totalSnapshot,
-        order_status: "paid",
-        payment_method: "paystack",
-        payment_reference: paymentReference,
-        payment_status: "paid",
-        payment_date: new Date().toISOString(),
-        order_type: "online",
-      })
-      .select()
-      .single();
-
-    if (orderError) {
-      throw new Error(orderError.message);
-    }
-
-    const orderRows = cartSnapshot.map((item) => ({
-      order_id: order.id,
-      product_id: item.id,
-      product_name: item.name,
-      quantity: Number(item.quantity || 1),
-    }));
-
-    const { error: itemsError } = await supabase
-      .from("order_items")
-      .insert(orderRows);
-
-    if (itemsError) {
-      throw new Error(itemsError.message);
-    }
-  };
-
   const createOnlineOrder = async () => {
     if (!validateCheckout()) return;
 
     const cartSnapshot = [...cartItems];
-const totalSnapshot = subtotal;
-
-// Immediately clear the cart
-updateCart([]);
-setCheckoutOpen(false);
 
     try {
       setPlacingOrder(true);
@@ -283,9 +237,14 @@ setCheckoutOpen(false);
         },
         body: JSON.stringify({
           email: customerEmail.trim(),
-          amount: subtotal,
           name: customerName.trim(),
           phone: customerPhone.trim(),
+          deliveryAddress: deliveryAddress.trim(),
+          shopId: selectedShop?.id,
+          items: cartSnapshot.map((item) => ({
+            productId: item.id,
+            quantity: Number(item.quantity || 1),
+          })),
         }),
       });
 
@@ -303,7 +262,7 @@ setCheckoutOpen(false);
       popup.resumeTransaction(initData.data.access_code, {
         onSuccess: async (transaction: any) => {
           try {
-            const reference = transaction?.reference;
+            const reference = transaction?.reference || initData.data.reference;
 
             if (!reference) {
               showMessage("Payment reference not found.");
@@ -316,10 +275,10 @@ setCheckoutOpen(false);
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({
-  reference,
-  amount: totalSnapshot,
-}),
+                body: JSON.stringify({
+                  reference,
+                  orderId: initData.data.order_id,
+                }),
             });
 
             const verifyData = await verifyRes.json();
@@ -331,12 +290,6 @@ setCheckoutOpen(false);
               setPlacingOrder(false);
               return;
             }
-
-           await savePaidOrder(
-  reference,
-  cartSnapshot,
-  totalSnapshot
-);
 
             updateCart([]);
             setCheckoutOpen(false);

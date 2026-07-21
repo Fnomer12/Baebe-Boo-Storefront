@@ -65,8 +65,30 @@ export default function BaebeCounterPage() {
         return;
       }
 
+      const staffCode = sessionStorage.getItem("baebe_pending_counter_staff_code");
+      const response = await fetch("/api/auth/counter", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${data.session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ staffCode }),
+      });
+
+      if (!response.ok) {
+        await supabase.auth.signOut();
+        router.replace("/BaebeCounter/login");
+        return;
+      }
+
+      const result = await response.json();
+      const staff = result.staff;
       sessionStorage.setItem("baebe_counter_auth", "true");
       sessionStorage.setItem("baebe_counter_email", data.session.user.email);
+      sessionStorage.setItem("baebe_counter_staff_id", staff.id);
+      sessionStorage.setItem("baebe_counter_staff_code", staff.code);
+      sessionStorage.setItem("baebe_counter_shop_id", staff.shop.id);
+      sessionStorage.setItem("baebe_counter_shop", JSON.stringify(staff.shop));
       setChecking(false);
     };
 
