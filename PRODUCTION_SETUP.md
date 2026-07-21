@@ -12,16 +12,14 @@ Apply `supabase/migrations/20260721_production_security.sql` in the Supabase SQL
 Then seed the authorized accounts using the SQL editor:
 
 ```sql
-insert into public.admin_users (email)
-values ('admin@example.com')
-on conflict (email) do update set active = true;
+insert into public.admin_users (email, full_name, role, is_active)
+values ('admin@example.com', 'Baebe Boo Admin', 'boss', true)
+on conflict (email) do update set role = 'boss', is_active = true;
 
 insert into public.staff_authorizations (email, staff_id)
 values ('counter@example.com', 'STAFF_UUID')
 on conflict (email) do update set active = true;
 ```
-
-Set the matching admin email in the server environment as `ADMIN_EMAILS`.
 
 Set the Paystack webhook URL to:
 
@@ -36,7 +34,6 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
 PAYSTACK_SECRET_KEY=
-ADMIN_EMAILS=
 ```
 
 Keep the server environment file at mode `600`. Never use `SUPABASE_SECRET_KEY` in a `NEXT_PUBLIC_*` variable.

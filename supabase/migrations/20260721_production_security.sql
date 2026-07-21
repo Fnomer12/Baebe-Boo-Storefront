@@ -1,12 +1,6 @@
 -- Production security boundary for the public storefront.
 -- Apply this migration in the Supabase SQL editor before accepting orders.
 
-create table if not exists public.admin_users (
-  email text primary key,
-  active boolean not null default true,
-  created_at timestamptz not null default now()
-);
-
 create table if not exists public.staff_authorizations (
   email text primary key,
   staff_id uuid not null references public.shop_staff(id) on delete cascade,
@@ -28,7 +22,8 @@ as $$
     select 1
     from public.admin_users
     where lower(email) = lower(auth.jwt() ->> 'email')
-      and active = true
+      and role = 'boss'
+      and is_active = true
   );
 $$;
 

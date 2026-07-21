@@ -1,15 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-function allowedAdminEmails() {
-  return new Set(
-    (process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
-
 export async function POST(request: Request) {
   const authorization = request.headers.get("authorization");
   const accessToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -27,7 +18,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ authorized: false }, { status: 401 });
   }
 
-  const authorized = allowedAdminEmails().has(user.email.toLowerCase());
+  const { data: adminUser, error: adminError } = await supabaseAdmin
+    .from("admin_users")
+    .select("email, role, is_active")
+    .ilike("email", user.email)
+    .eq("role", "boss")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  const authorized = !adminError && Boolean(adminUser);
 
   return NextResponse.json(
     { authorized, email: user.email },
