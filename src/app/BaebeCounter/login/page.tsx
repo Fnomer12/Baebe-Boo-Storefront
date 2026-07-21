@@ -37,7 +37,9 @@ export default function CounterLoginPage() {
     const { error: googleError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/BaebeCounter`,
+        redirectTo: `${(
+          process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+        ).replace(/\/$/, "")}/BaebeCounter`,
       },
     });
 

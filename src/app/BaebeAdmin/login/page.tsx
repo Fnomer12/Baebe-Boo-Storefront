@@ -24,7 +24,9 @@ export default function AdminLoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/BaebeAdmin`,
+        redirectTo: `${(
+          process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+        ).replace(/\/$/, "")}/BaebeAdmin`,
       },
     });
 
