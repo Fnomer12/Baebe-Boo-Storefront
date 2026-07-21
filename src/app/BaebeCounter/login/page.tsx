@@ -1,100 +1,89 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ShieldCheck } from "lucide-react";
 
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 48 48" className="h-5 w-5">
-      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
-      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.6 8.3 6.3 14.7z" />
-      <path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.5-5.2l-6.2-5.2C29.3 35.1 26.8 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
-      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.1 5.6l6.2 5.2C36.9 39.3 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
-    </svg>
-  );
-}
-
 export default function CounterLoginPage() {
   const [staffCode, setStaffCode] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const loginWithGoogle = async () => {
+  const login = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setError("");
 
     const cleanCode = staffCode.trim().toUpperCase();
-
     if (!cleanCode) {
-      setError("Enter your unique counter ID.");
+      setError("Enter your CounterID.");
+      return;
+    }
+
+    setLoading(true);
+    const loginEmail = `${cleanCode.toLowerCase()}@counter.baebe-boo.local`;
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
+      password,
+    });
+
+    if (loginError) {
+      setError("Invalid CounterID or password.");
+      setLoading(false);
       return;
     }
 
     sessionStorage.setItem("baebe_pending_counter_staff_code", cleanCode);
-
-    setLoading(true);
-
-    const { error: googleError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${(
-          process.env.NEXT_PUBLIC_SITE_URL ||
-          "https://baebe-boo.jtechinnovations.tech"
-        ).replace(/\/$/, "")}/BaebeCounter`,
-      },
-    });
-
-    if (googleError) {
-      setError(googleError.message);
-      setLoading(false);
-    }
+    window.location.assign("/BaebeCounter");
   };
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F8F5F0] px-4 text-black">
       <section className="w-full max-w-md rounded-[2.5rem] border border-white/70 bg-white/85 p-8 text-center shadow-xl backdrop-blur-xl">
         <div className="mx-auto mb-6 flex h-28 w-28 items-center justify-center rounded-full bg-[#F8F5F0] shadow-inner">
-          <img
-            src="/baebe-boo.jpg"
-            alt="Baebe Boo"
-            className="h-20 w-20 rounded-full object-cover"
-          />
+          <img src="/baebe-boo.jpg" alt="Baebe Boo" className="h-20 w-20 rounded-full object-cover" />
         </div>
-
         <h1 className="text-3xl font-semibold">Baebe Counter Login</h1>
-
         <p className="mt-3 text-sm leading-6 text-black/50">
-          Enter your unique counter ID, then continue with Google.
+          Sign in with your CounterID and password.
         </p>
 
-        {error && (
-          <div className="mt-6 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
-            {error}
-          </div>
-        )}
-
-        <input
-          value={staffCode}
-          onChange={(e) => setStaffCode(e.target.value)}
-          placeholder="UNIQUE ID"
-          className="mt-6 h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm font-semibold uppercase outline-none focus:border-black"
-        />
-
-        <button
-          onClick={loginWithGoogle}
-          disabled={loading}
-          className="mt-6 flex h-14 w-full items-center justify-center gap-3 rounded-full bg-black text-sm font-semibold text-white disabled:opacity-50"
-        >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
-            <GoogleIcon />
-          </span>
-          {loading ? "Opening Google..." : "Continue with Google"}
-        </button>
+        <form onSubmit={login} className="mt-6 space-y-4">
+          {error && (
+            <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+              {error}
+            </div>
+          )}
+          <input
+            value={staffCode}
+            onChange={(event) => setStaffCode(event.target.value)}
+            placeholder="COUNTER ID"
+            autoComplete="username"
+            className="h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm font-semibold uppercase outline-none focus:border-black"
+            required
+          />
+          <input
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            type="password"
+            placeholder="PASSWORD"
+            autoComplete="current-password"
+            className="h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm outline-none focus:border-black"
+            required
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex h-14 w-full items-center justify-center gap-3 rounded-full bg-black text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
 
         <div className="mt-6 flex items-start gap-3 rounded-3xl bg-black/[0.04] p-4 text-left">
           <ShieldCheck size={18} className="mt-0.5 shrink-0" />
           <p className="text-xs leading-5 text-black/50">
-            Access is locked by unique counter ID, Google email and assigned shop location.
+            Access is locked by CounterID, password and assigned shop location.
           </p>
         </div>
       </section>

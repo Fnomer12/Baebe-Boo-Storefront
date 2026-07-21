@@ -57,7 +57,7 @@ export default function BaebeCounterPage() {
   const [activeTab, setActiveTab] = useState<CounterTab>("store");
 
   useEffect(() => {
-    const verifyGoogleAuth = async () => {
+    const verifyCounterAuth = async () => {
       const { data } = await supabase.auth.getSession();
 
       if (!data.session?.user?.email) {
@@ -92,7 +92,7 @@ export default function BaebeCounterPage() {
       setChecking(false);
     };
 
-    verifyGoogleAuth();
+    verifyCounterAuth();
   }, [router]);
 
   if (checking) {
@@ -100,7 +100,7 @@ export default function BaebeCounterPage() {
       <main className="flex h-screen items-center justify-center bg-white text-black">
         <div className="text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-black/10 border-t-black" />
-          <p className="mt-4 text-sm text-black/50">Verifying Google access...</p>
+          <p className="mt-4 text-sm text-black/50">Verifying counter access...</p>
         </div>
       </main>
     );

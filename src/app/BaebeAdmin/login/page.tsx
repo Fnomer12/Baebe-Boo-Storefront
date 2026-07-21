@@ -1,39 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 48 48" className="h-6 w-6">
-      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
-      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.2 4 9.4 8.5 6.3 14.7z" />
-      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.6 5.1C9.2 39.6 15.9 44 24 44z" />
-      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.2 5.2C36.9 39.1 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
-    </svg>
-  );
-}
-
 export default function AdminLoginPage() {
+  const router = useRouter();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleGoogleLogin = async () => {
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${(
-          process.env.NEXT_PUBLIC_SITE_URL ||
-          "https://baebe-boo.jtechinnovations.tech"
-        ).replace(/\/$/, "")}/BaebeAdmin`,
-      },
+    const cleanUsername = username.trim().toLowerCase();
+    const loginEmail = cleanUsername.includes("@")
+      ? cleanUsername
+      : `${cleanUsername}@admin.baebe-boo.local`;
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
+      password,
     });
 
-    if (error) {
+    if (loginError) {
+      setError("Invalid username or password.");
       setLoading(false);
+      return;
     }
+
+    router.replace("/BaebeAdmin");
   };
 
   return (
@@ -43,27 +42,48 @@ export default function AdminLoginPage() {
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-black text-white">
             <ShieldCheck size={30} />
           </div>
-
           <h1 className="text-4xl font-semibold">Baebe Admin</h1>
-
           <p className="mt-3 text-sm leading-6 text-black/50">
             Secure administration portal.
             <br />
-            Access is restricted to authorized Google accounts.
+            Access is restricted to authorized admin accounts.
           </p>
         </div>
 
-        <button
-          onClick={handleGoogleLogin}
-          disabled={loading}
-          className="mt-10 flex h-16 w-full items-center justify-center gap-4 rounded-full border border-black/10 bg-white text-base font-semibold text-black shadow-sm transition hover:bg-[#F8F5F0] disabled:opacity-50"
-        >
-          <GoogleIcon />
-          {loading ? "Redirecting..." : "Continue with Google"}
-        </button>
+        <form onSubmit={handleLogin} className="mt-10 space-y-4">
+          {error && (
+            <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+              {error}
+            </div>
+          )}
+          <input
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="Username or email"
+            autoComplete="username"
+            className="h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm outline-none focus:border-black"
+            required
+          />
+          <input
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            type="password"
+            placeholder="Password"
+            autoComplete="current-password"
+            className="h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm outline-none focus:border-black"
+            required
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex h-16 w-full items-center justify-center rounded-full bg-black text-base font-semibold text-white shadow-sm transition hover:bg-black/80 disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
 
         <p className="mt-6 text-center text-xs text-black/40">
-          Google OAuth • Protected Routes • Role-Based Access
+          Password authentication • Protected routes • Role-based access
         </p>
       </div>
     </main>

@@ -9,16 +9,20 @@ Apply `supabase/migrations/20260721_production_security.sql` in the Supabase SQL
 - Adds the transactional `finalize_paid_order` function.
 - Adds the `register_member` function for safe public membership registration.
 
-Then seed the authorized accounts using the SQL editor:
+Create the password accounts in Supabase Authentication first. Admin usernames are
+accepted as either an email address or a short username. A short admin username is
+stored as `<username>@admin.baebe-boo.local`. CounterIDs use the same convention:
+`<counterid>@counter.baebe-boo.local`.
+
+Then seed the authorization records using the SQL editor:
 
 ```sql
 insert into public.admin_users (email, full_name, role, is_active)
-values ('admin@example.com', 'Baebe Boo Admin', 'boss', true)
-on conflict (email) do update set role = 'boss', is_active = true;
+values ('admin@admin.baebe-boo.local', 'Baebe Boo Admin', 'boss', true);
 
 insert into public.staff_authorizations (email, staff_id)
-values ('counter@example.com', 'STAFF_UUID')
-on conflict (email) do update set active = true;
+values ('counter01@counter.baebe-boo.local', 'STAFF_UUID')
+on conflict (email) do update set staff_id = excluded.staff_id, active = true;
 ```
 
 Set the Paystack webhook URL to:
