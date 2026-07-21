@@ -38,7 +38,8 @@ export default function CounterLoginPage() {
       provider: "google",
       options: {
         redirectTo: `${(
-          process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+          process.env.NEXT_PUBLIC_SITE_URL ||
+          "https://baebe-boo.jtechinnovations.tech"
         ).replace(/\/$/, "")}/BaebeCounter`,
       },
     });

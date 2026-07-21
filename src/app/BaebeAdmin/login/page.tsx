@@ -25,7 +25,8 @@ export default function AdminLoginPage() {
       provider: "google",
       options: {
         redirectTo: `${(
-          process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+          process.env.NEXT_PUBLIC_SITE_URL ||
+          "https://baebe-boo.jtechinnovations.tech"
         ).replace(/\/$/, "")}/BaebeAdmin`,
       },
     });
