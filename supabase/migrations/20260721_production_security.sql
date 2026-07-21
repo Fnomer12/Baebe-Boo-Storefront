@@ -61,6 +61,30 @@ alter table public.shop_staff enable row level security;
 alter table public.completed_orders enable row level security;
 alter table public.completed_order_items enable row level security;
 
+drop policy if exists product_images_public_read on storage.objects;
+drop policy if exists product_images_admin_insert on storage.objects;
+drop policy if exists product_images_admin_update on storage.objects;
+drop policy if exists product_images_admin_delete on storage.objects;
+create policy product_images_public_read on storage.objects
+  for select to anon, authenticated
+  using (bucket_id = 'product-images');
+create policy product_images_admin_insert on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'product-images' and public.is_admin());
+create policy product_images_admin_update on storage.objects
+  for update to authenticated
+  using (bucket_id = 'product-images' and public.is_admin())
+  with check (bucket_id = 'product-images' and public.is_admin());
+create policy product_images_admin_delete on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'product-images' and public.is_admin());
+
+drop policy if exists staff_images_admin_all on storage.objects;
+create policy staff_images_admin_all on storage.objects
+  for all to authenticated
+  using (bucket_id = 'staff-images' and public.is_admin())
+  with check (bucket_id = 'staff-images' and public.is_admin());
+
 drop policy if exists products_public_read on public.products;
 drop policy if exists products_admin_all on public.products;
 create policy products_public_read on public.products

@@ -23,6 +23,12 @@ on conflict (email) do update set active = true;
 
 Set the matching admin email in the server environment as `ADMIN_EMAILS`.
 
+Set the Paystack webhook URL to:
+
+```text
+https://baebe-boo.jtechinnovations.tech/api/paystack/webhook
+```
+
 ## Required server environment
 
 ```text
