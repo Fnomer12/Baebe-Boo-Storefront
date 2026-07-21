@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireServerEnv } from "@/lib/server-env";
+import { finalizeVerifiedOrder } from "@/lib/orders/finalize-paid-order";
 
 export async function POST(req: Request) {
   try {
@@ -48,7 +50,7 @@ export async function POST(req: Request) {
       {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          Authorization: `Bearer ${requireServerEnv("PAYSTACK_SECRET_KEY")}`,
         },
       }
     );
@@ -61,12 +63,12 @@ export async function POST(req: Request) {
     if (
       data?.status === true &&
       data?.data?.status === "success" &&
-      paidAmount === expectedAmount
+      paidAmount === expectedAmount &&
+      data?.data?.currency === "GHS" &&
+      data?.data?.reference === reference &&
+      data?.data?.metadata?.order_id === order.id
     ) {
-      const { error: updateError } = await supabaseAdmin.rpc(
-        "finalize_paid_order",
-        { p_order_id: order.id }
-      );
+      const { error: updateError } = await finalizeVerifiedOrder(order.id, reference);
 
       if (updateError) {
         return NextResponse.json(

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import BaebeCounter, { CounterTab } from "@/components/BaebeCounter";
 import {
@@ -39,6 +41,23 @@ type CounterItem = Product & {
 };
 
 type PaymentMethod = "cash" | "visa" | "momo";
+
+type ProductRecord = {
+  id: string;
+  name: string | null;
+  category: string | null;
+  age_range: string | null;
+  gender: string | null;
+  sku: string | null;
+  price: number | string | null;
+  image_url: string | null;
+  is_active: boolean | null;
+};
+
+type AvailabilityRecord = {
+  stock_quantity: number | string | null;
+  products: ProductRecord | ProductRecord[] | null;
+};
 
 const ageRanges = [
   "All Ages",
@@ -129,6 +148,7 @@ function StoreSection() {
   const [modalOpen, setModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [loading, setLoading] = useState(true);
+  const [saleMessage, setSaleMessage] = useState("");
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -180,8 +200,9 @@ function StoreSection() {
         return;
       }
 
-      const mapped = (data || [])
-        .map((row: any) => {
+      const rows = (data || []) as AvailabilityRecord[];
+      const mapped = rows
+        .map((row) => {
           const product = Array.isArray(row.products)
             ? row.products[0]
             : row.products;
@@ -306,6 +327,27 @@ function StoreSection() {
     (sum, item) => sum + item.price * item.quantity,
     0
   );
+
+  const completeSale = async () => {
+    const response = await fetch("/api/counter/sales", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: counterItems.map((item) => ({ productId: item.id, quantity: item.quantity })),
+        paymentMethod,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || "Could not complete sale.");
+    const quantities = new Map(counterItems.map((item) => [item.id, item.quantity]));
+    setProducts((current) => current.map((product) => ({
+      ...product,
+      stock: Math.max(0, product.stock - (quantities.get(product.id) || 0)),
+    })));
+    setSaleMessage(`Sale ${result.sale?.order_number || "completed"} saved successfully.`);
+    updateCounterItems([]);
+    setSelectedIds([]);
+  };
 
   return (
     <div>
@@ -516,12 +558,15 @@ function StoreSection() {
                     {selected && <Check size={16} />}
                   </button>
 
-                  <div className="aspect-square bg-[#F8F5F0]">
+                  <div className="relative aspect-square bg-[#F8F5F0]">
                     {product.imageUrl ? (
-                      <img
+                      <Image
                         src={product.imageUrl}
                         alt={product.name}
-                        className="h-full w-full object-cover"
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
+                        unoptimized
+                        className="object-cover"
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center">
@@ -591,8 +636,10 @@ function StoreSection() {
           onIncrease={increaseItem}
           onDecrease={decreaseItem}
           onRemove={removeItem}
+          onComplete={completeSale}
         />
       )}
+      {saleMessage && <p role="status" className="fixed bottom-6 right-6 z-[90] rounded-full bg-green-600 px-5 py-3 text-sm font-semibold text-white shadow-xl">{saleMessage}</p>}
     </div>
   );
 }
@@ -606,6 +653,7 @@ function ProceedCounterModal({
   onIncrease,
   onDecrease,
   onRemove,
+  onComplete,
 }: {
   items: CounterItem[];
   total: number;
@@ -615,7 +663,10 @@ function ProceedCounterModal({
   onIncrease: (id: string) => void;
   onDecrease: (id: string) => void;
   onRemove: (id: string) => void;
+  onComplete: () => Promise<void>;
 }) {
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 px-4 backdrop-blur-xl">
       <section className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-white/60 bg-white/80 p-6 shadow-2xl backdrop-blur-2xl">
@@ -643,12 +694,15 @@ function ProceedCounterModal({
                 key={item.id}
                 className="grid gap-4 rounded-[1.5rem] border border-black/10 bg-white/80 p-4 shadow-sm md:grid-cols-[90px_1fr_auto]"
               >
-                <div className="h-24 w-24 overflow-hidden rounded-2xl bg-[#F8F5F0]">
+                <div className="relative h-24 w-24 overflow-hidden rounded-2xl bg-[#F8F5F0]">
                   {item.imageUrl ? (
-                    <img
+                    <Image
                       src={item.imageUrl}
                       alt={item.name}
-                      className="h-full w-full object-cover"
+                      fill
+                      sizes="96px"
+                      unoptimized
+                      className="object-cover"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
@@ -749,8 +803,23 @@ function ProceedCounterModal({
               </div>
             </div>
 
-            <button className="mt-6 h-14 w-full rounded-full bg-black text-sm font-semibold text-white">
-              Complete Sale
+            {errorMessage && <p role="alert" className="mt-4 rounded-2xl bg-red-50 p-3 text-xs text-red-700">{errorMessage}</p>}
+            <button
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                setErrorMessage("");
+                try {
+                  await onComplete();
+                } catch (error) {
+                  setErrorMessage(error instanceof Error ? error.message : "Could not complete sale.");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="mt-6 h-14 w-full rounded-full bg-black text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {saving ? "Completing sale…" : "Complete Sale"}
             </button>
           </aside>
         </div>
@@ -766,7 +835,7 @@ function PaymentButton({
   onClick,
 }: {
   label: string;
-  icon: any;
+  icon: LucideIcon;
   active: boolean;
   onClick: () => void;
 }) {

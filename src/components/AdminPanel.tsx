@@ -9,12 +9,12 @@ import {
   ShieldCheck,
   Bell,
   Users,
-  Search,
-ReceiptText,
   ClipboardList,
   Database,
+  type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export type AdminTab =
   | "dashboard"
@@ -41,7 +41,8 @@ export default function AdminPanel({
 }: AdminPanelProps) {
   const router = useRouter();
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     sessionStorage.removeItem("baebe_admin_auth");
     sessionStorage.removeItem("baebe_admin_role");
     router.replace("/BaebeAdmin/login");
@@ -88,7 +89,19 @@ export default function AdminPanel({
   );
 }
 
-function TabButton({ label, icon: Icon, active, onClick, count = 0 }: any) {
+function TabButton({
+  label,
+  icon: Icon,
+  active,
+  onClick,
+  count = 0,
+}: {
+  label: string;
+  icon: LucideIcon;
+  active: boolean;
+  onClick: () => void;
+  count?: number;
+}) {
   return (
     <button
       onClick={onClick}

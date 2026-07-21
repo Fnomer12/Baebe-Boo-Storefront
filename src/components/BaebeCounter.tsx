@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ShoppingBag, Store, LogOut, ShieldCheck, MapPin } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -187,7 +188,7 @@ function TabButton({
   onClick,
 }: {
   label: string;
-  icon: any;
+  icon: LucideIcon;
   active: boolean;
   onClick: () => void;
 }) {

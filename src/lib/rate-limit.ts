@@ -1,6 +1,16 @@
 type Bucket = { count: number; resetAt: number };
 
 const buckets = new Map<string, Bucket>();
+let requestsSinceSweep = 0;
+
+function sweepExpiredBuckets(now: number) {
+  requestsSinceSweep += 1;
+  if (requestsSinceSweep < 100) return;
+  requestsSinceSweep = 0;
+  for (const [bucketKey, bucket] of buckets) {
+    if (bucket.resetAt <= now) buckets.delete(bucketKey);
+  }
+}
 
 export function rateLimit(
   request: Request,
@@ -14,6 +24,7 @@ export function rateLimit(
     "unknown";
   const bucketKey = `${key}:${ip}`;
   const now = Date.now();
+  sweepExpiredBuckets(now);
   const current = buckets.get(bucketKey);
 
   if (!current || current.resetAt <= now) {

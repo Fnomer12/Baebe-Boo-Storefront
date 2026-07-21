@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 type OrderRecord = {
   id: string;
@@ -25,8 +26,25 @@ type OrderRecord = {
   deliveredAt: string | null;
 };
 
+type OrderApiRecord = {
+  id: string;
+  record_code?: string | null;
+  order_number?: string | null;
+  customer_name?: string | null;
+  total_amount?: number | string | null;
+  delivery_address?: string | null;
+  digital_address?: string | null;
+  order_status?: string | null;
+  shipping_status?: OrderRecord["shippingStatus"] | null;
+  created_at: string;
+  shipped_at?: string | null;
+  delivered_at?: string | null;
+};
+
+type TrackingResponse = { message?: string; orders?: OrderApiRecord[] };
+
 export default function TrackRecordsPage() {
-  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [orders, setOrders] = useState<OrderApiRecord[]>([]);
   const [orderNumber, setOrderNumber] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,7 +64,7 @@ export default function TrackRecordsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderNumber, email }),
       });
-      const result = await response.json();
+      const result = (await response.json()) as TrackingResponse;
 
       if (!response.ok) {
         setOrders([]);
@@ -63,7 +81,7 @@ export default function TrackRecordsPage() {
     }
   };
 
-  const mapOrder = (order: any): OrderRecord => ({
+  const mapOrder = (order: OrderApiRecord): OrderRecord => ({
       id: order.id,
       recordCode:
         order.record_code || `#BBS-${order.id.slice(0, 6).toUpperCase()}`,
@@ -75,8 +93,8 @@ export default function TrackRecordsPage() {
       orderStatus: order.order_status || "completed",
       shippingStatus: order.shipping_status || "received",
       createdAt: order.created_at,
-      shippedAt: order.shipped_at,
-      deliveredAt: order.delivered_at,
+      shippedAt: order.shipped_at ?? null,
+      deliveredAt: order.delivered_at ?? null,
     });
 
   const filteredOrders = useMemo(() => {
@@ -249,7 +267,7 @@ function Step({
   date,
 }: {
   active: boolean;
-  icon: any;
+  icon: LucideIcon;
   title: string;
   date: string | null;
 }) {

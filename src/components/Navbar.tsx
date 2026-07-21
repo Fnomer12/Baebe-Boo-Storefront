@@ -27,6 +27,7 @@ import {
   MessageCircle,
   Truck,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
@@ -93,12 +94,17 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
   useEffect(() => {
     const updateCartCount = () => {
-      const cart = JSON.parse(localStorage.getItem("baebe_cart") || "[]");
-
-      const total = cart.reduce(
-        (sum: number, item: any) => sum + Number(item.quantity || 0),
-        0
-      );
+      let storedCart: unknown = [];
+      try {
+        storedCart = JSON.parse(localStorage.getItem("baebe_cart") || "[]") as unknown;
+      } catch {
+        storedCart = [];
+      }
+      const cart = Array.isArray(storedCart) ? storedCart : [];
+      const total = cart.reduce((sum: number, item: unknown) => {
+        if (!item || typeof item !== "object" || !("quantity" in item)) return sum;
+        return sum + Number(item.quantity || 0);
+      }, 0);
 
       setLiveCartCount(total);
     };
@@ -203,6 +209,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                 src="/baebe-boo.jpg"
                 alt="Baebe Boo baby store"
                 fill
+                sizes="(min-width: 768px) 64px, 48px"
                 className="object-cover"
                 priority
               />
@@ -221,7 +228,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                 }`}
               >
                 <div className="absolute inset-0 flex items-center overflow-hidden [backface-visibility:hidden]">
-                  <h1
+                  <span
                     className={`${cormorant.className} truncate whitespace-nowrap font-semibold tracking-tight text-black transition-all duration-500 ${
                       minimized
                         ? "text-[1.45rem] sm:text-3xl md:text-4xl"
@@ -229,11 +236,11 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                     }`}
                   >
                     Baebe Boo
-                  </h1>
+                  </span>
                 </div>
 
                 <div className="absolute inset-0 flex items-center overflow-hidden [transform:rotateX(180deg)] [backface-visibility:hidden]">
-                  <h1
+                  <span
                     className={`${cormorant.className} truncate whitespace-nowrap font-semibold tracking-tight text-black transition-all duration-500 ${
                       minimized
                         ? "text-[1.45rem] sm:text-3xl md:text-4xl"
@@ -241,7 +248,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                     }`}
                   >
                     Storefront
-                  </h1>
+                  </span>
                 </div>
               </div>
             </div>
@@ -526,7 +533,7 @@ function MenuLink({
   close,
 }: {
   href: string;
-  icon: any;
+  icon: LucideIcon;
   label: string;
   close: () => void;
 }) {

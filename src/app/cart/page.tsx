@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 import {
@@ -24,6 +25,27 @@ type Shop = {
   location: string;
 };
 
+type DeliveryZone = {
+  id: string;
+  name: string;
+  baseFee: number;
+  freeDeliveryThreshold: number | null;
+  estimatedDaysMin: number | null;
+  estimatedDaysMax: number | null;
+};
+
+type CheckoutQuote = {
+  subtotal: number;
+  discount: number;
+  deliveryFee: number;
+  total: number;
+  promotionMessage: string | null;
+  promotionApplied: boolean;
+  promotionCodeValid: boolean;
+  split: boolean;
+  shipmentCount: number;
+};
+
 type CartItem = {
   id: string;
   name: string;
@@ -37,6 +59,7 @@ type CartItem = {
   shop?: Shop;
   shopId?: string;
   stockAvailable?: number;
+  fulfilment?: "national" | "branch";
 };
 
 const cleanPrice = (price: number | string) => {
@@ -54,17 +77,119 @@ export default function CartPage() {
   const [customerPhone, setCustomerPhone] = useState("+233");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [placingOrder, setPlacingOrder] = useState(false);
+  const [fulfilmentType, setFulfilmentType] = useState<"delivery" | "pickup">("delivery");
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [deliveryZoneId, setDeliveryZoneId] = useState("");
+  const [pickupShopId, setPickupShopId] = useState("");
+  const [checkoutOptionsLoading, setCheckoutOptionsLoading] = useState(false);
+  const [promotionInput, setPromotionInput] = useState("");
+  const [appliedPromotionCode, setAppliedPromotionCode] = useState("");
+  const [quoteRevision, setQuoteRevision] = useState(0);
+  const [quote, setQuote] = useState<CheckoutQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+
+  const showMessage = useCallback((text: string) => {
+    setMessage(text);
+    window.dispatchEvent(
+      new CustomEvent("baebe_cart_message", {
+        detail: text,
+      }),
+    );
+    setTimeout(() => setMessage(""), 3000);
+  }, []);
 
   useEffect(() => {
-    try {
-      const cart = JSON.parse(localStorage.getItem("baebe_cart") || "[]");
-      setCartItems(Array.isArray(cart) ? cart : []);
-    } catch {
-      setCartItems([]);
-    }
+    queueMicrotask(() => {
+      try {
+        const cart: unknown = JSON.parse(localStorage.getItem("baebe_cart") || "[]");
+        setCartItems(Array.isArray(cart) ? cart : []);
+      } catch {
+        setCartItems([]);
+      }
+    });
   }, []);
 
   const selectedShop = cartItems[0]?.shop || null;
+
+  useEffect(() => {
+    if (!checkoutOpen) return;
+    const controller = new AbortController();
+    const loadOptions = async () => {
+      setCheckoutOptionsLoading(true);
+      try {
+        const response = await fetch("/api/checkout/options", { signal: controller.signal });
+        const result = await response.json();
+        if (!response.ok || !result.status) throw new Error(result.message);
+        const nextZones = (result.deliveryZones || []) as DeliveryZone[];
+        const nextShops = (result.shops || []) as Shop[];
+        setDeliveryZones(nextZones);
+        setShops(nextShops);
+        setDeliveryZoneId((current) => current || nextZones[0]?.id || "");
+        setPickupShopId((current) => current || selectedShop?.id || nextShops[0]?.id || "");
+      } catch (error: unknown) {
+        if (!controller.signal.aborted) {
+          showMessage(error instanceof Error ? error.message : "Checkout options are unavailable.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setCheckoutOptionsLoading(false);
+      }
+    };
+    void loadOptions();
+    return () => controller.abort();
+  }, [checkoutOpen, selectedShop?.id, showMessage]);
+
+  useEffect(() => {
+    if (
+      !checkoutOpen ||
+      checkoutOptionsLoading ||
+      (fulfilmentType === "delivery" && !deliveryZoneId) ||
+      (fulfilmentType === "pickup" && !pickupShopId)
+    ) return;
+    const controller = new AbortController();
+    const loadQuote = async () => {
+      setQuoteLoading(true);
+      try {
+        const response = await fetch("/api/checkout/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            items: cartItems.map((item) => ({
+              productId: item.id,
+              quantity: Number(item.quantity || 1),
+            })),
+            fulfilmentType,
+            deliveryZoneId: fulfilmentType === "delivery" ? deliveryZoneId : undefined,
+            shopId: fulfilmentType === "pickup" ? pickupShopId : undefined,
+            promotionCode: appliedPromotionCode || undefined,
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.status) throw new Error(result.message);
+        setQuote(result.data as CheckoutQuote);
+      } catch (error: unknown) {
+        if (!controller.signal.aborted) {
+          setQuote(null);
+          showMessage(error instanceof Error ? error.message : "Could not calculate checkout pricing.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setQuoteLoading(false);
+      }
+    };
+    void loadQuote();
+    return () => controller.abort();
+  }, [
+    appliedPromotionCode,
+    cartItems,
+    checkoutOpen,
+    checkoutOptionsLoading,
+    deliveryZoneId,
+    fulfilmentType,
+    pickupShopId,
+    quoteRevision,
+    showMessage,
+  ]);
 
   const subtotal = cartItems.reduce(
     (total, item) => total + cleanPrice(item.price) * Number(item.quantity || 1),
@@ -75,18 +200,6 @@ export default function CartPage() {
     (sum, item) => sum + Number(item.quantity || 1),
     0
   );
-
-  const showMessage = (text: string) => {
-    setMessage(text);
-
-    window.dispatchEvent(
-      new CustomEvent("baebe_cart_message", {
-        detail: text,
-      })
-    );
-
-    setTimeout(() => setMessage(""), 3000);
-  };
 
   const updateCart = (items: CartItem[]) => {
     setCartItems(items);
@@ -124,7 +237,16 @@ export default function CartPage() {
     const shopId = item.shop?.id || item.shopId;
 
     if (!shopId) {
-      showMessage("Shop location not found for this item.");
+      const currentQuantity = Number(item.quantity || 1);
+      if (currentQuantity >= 100) {
+        showMessage("Maximum cart quantity reached. Final stock is confirmed at checkout.");
+        return;
+      }
+      updateCart(
+        cartItems.map((cartItem) =>
+          cartItem.id === id ? { ...cartItem, quantity: currentQuantity + 1 } : cartItem,
+        ),
+      );
       return;
     }
 
@@ -199,8 +321,18 @@ export default function CartPage() {
       return false;
     }
 
-    if (!deliveryAddress.trim()) {
+    if (fulfilmentType === "delivery" && !deliveryZoneId) {
+      showMessage("Choose a delivery zone.");
+      return false;
+    }
+
+    if (fulfilmentType === "delivery" && !deliveryAddress.trim()) {
       showMessage("Enter delivery address.");
+      return false;
+    }
+
+    if (fulfilmentType === "pickup" && !pickupShopId) {
+      showMessage("Choose a collection branch.");
       return false;
     }
 
@@ -209,13 +341,13 @@ export default function CartPage() {
       return false;
     }
 
-    if (!selectedShop?.id) {
-      showMessage("Select a shop location before checkout.");
+    if (subtotal <= 0) {
+      showMessage("Invalid cart total.");
       return false;
     }
 
-    if (subtotal <= 0) {
-      showMessage("Invalid cart total.");
+    if (!quote) {
+      showMessage("Wait for the secure checkout total to finish loading.");
       return false;
     }
 
@@ -240,7 +372,10 @@ export default function CartPage() {
           name: customerName.trim(),
           phone: customerPhone.trim(),
           deliveryAddress: deliveryAddress.trim(),
-          shopId: selectedShop?.id,
+          fulfilmentType,
+          deliveryZoneId: fulfilmentType === "delivery" ? deliveryZoneId : undefined,
+          shopId: fulfilmentType === "pickup" ? pickupShopId : undefined,
+          promotionCode: appliedPromotionCode || undefined,
           items: cartSnapshot.map((item) => ({
             productId: item.id,
             quantity: Number(item.quantity || 1),
@@ -260,7 +395,7 @@ export default function CartPage() {
       const popup = new PaystackPop();
 
       popup.resumeTransaction(initData.data.access_code, {
-        onSuccess: async (transaction: any) => {
+        onSuccess: async (transaction: { reference?: string }) => {
           try {
             const reference = transaction?.reference || initData.data.reference;
 
@@ -297,12 +432,15 @@ export default function CartPage() {
             setCustomerEmail("");
             setCustomerPhone("+233");
             setDeliveryAddress("");
+            setPromotionInput("");
+            setAppliedPromotionCode("");
+            setQuote(null);
             setPlacingOrder(false);
 
             showMessage("Payment successful. Order sent to admin notifications.");
-          } catch (error: any) {
+          } catch (error: unknown) {
             setPlacingOrder(false);
-            showMessage(error?.message || "Could not save order.");
+            showMessage(error instanceof Error ? error.message : "Could not save order.");
           }
         },
 
@@ -350,6 +488,12 @@ export default function CartPage() {
                 </span>
               </div>
             )}
+            {!selectedShop && cartItems.length > 0 && (
+              <div className="mt-5 inline-flex max-w-full items-start gap-3 rounded-3xl border border-sky-200 bg-sky-50 px-4 py-3 shadow-sm sm:items-center sm:rounded-full sm:px-5">
+                <MapPin size={18} className="mt-0.5 shrink-0 text-sky-700 sm:mt-0" />
+                <span className="break-words text-sm font-semibold">Nationwide fulfilment · best branch selected securely at checkout</span>
+              </div>
+            )}
           </div>
 
           {cartItems.length === 0 ? (
@@ -384,9 +528,12 @@ export default function CartPage() {
   <div className="grid grid-cols-[115px_1fr] gap-4 md:contents">
     <div className="aspect-square overflow-hidden rounded-[1.5rem] bg-neutral-100 md:h-[170px] md:w-[170px]">
       {item.imageUrl ? (
-        <img
+        <Image
           src={item.imageUrl}
           alt={item.name}
+          width={340}
+          height={340}
+          unoptimized
           className="h-full w-full object-cover"
         />
       ) : (
@@ -463,13 +610,19 @@ export default function CartPage() {
                   <div className="mt-5 rounded-3xl bg-[#F8F5F0] p-4">
                     <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-black/40">
                       <MapPin size={14} />
-                      Pickup Store
+                      Preferred branch
                     </p>
 
                     <p className="mt-2 font-semibold">{selectedShop.name}</p>
                     <p className="text-sm leading-6 text-black/50">
                       {selectedShop.location}
                     </p>
+                  </div>
+                )}
+                {!selectedShop && (
+                  <div className="mt-5 rounded-3xl bg-[#DDF2FF] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/40">Smart fulfilment</p>
+                    <p className="mt-2 text-sm leading-6 text-black/60">We reserve stock from the fewest branches possible. Any split delivery is shown before payment.</p>
                   </div>
                 )}
 
@@ -533,6 +686,73 @@ export default function CartPage() {
             </div>
 
             <div className="space-y-4">
+              <fieldset className="rounded-3xl border border-black/10 bg-white/90 p-4">
+                <legend className="px-2 text-sm font-semibold">How would you like your order?</legend>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFulfilmentType("delivery")}
+                    className={`rounded-2xl border px-3 py-3 text-left text-sm font-semibold transition ${
+                      fulfilmentType === "delivery"
+                        ? "border-black bg-black text-white"
+                        : "border-black/10 bg-white text-black"
+                    }`}
+                  >
+                    Delivery
+                    <span className={`mt-1 block text-xs font-normal ${fulfilmentType === "delivery" ? "text-white/65" : "text-black/50"}`}>
+                      Nationwide to your address
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFulfilmentType("pickup")}
+                    className={`rounded-2xl border px-3 py-3 text-left text-sm font-semibold transition ${
+                      fulfilmentType === "pickup"
+                        ? "border-black bg-black text-white"
+                        : "border-black/10 bg-white text-black"
+                    }`}
+                  >
+                    Click & collect
+                    <span className={`mt-1 block text-xs font-normal ${fulfilmentType === "pickup" ? "text-white/65" : "text-black/50"}`}>
+                      No delivery charge
+                    </span>
+                  </button>
+                </div>
+
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-black/45" htmlFor="fulfilment-location">
+                  {fulfilmentType === "delivery" ? "Delivery zone" : "Collection branch"}
+                </label>
+                <select
+                  id="fulfilment-location"
+                  value={fulfilmentType === "delivery" ? deliveryZoneId : pickupShopId}
+                  onChange={(event) =>
+                    fulfilmentType === "delivery"
+                      ? setDeliveryZoneId(event.target.value)
+                      : setPickupShopId(event.target.value)
+                  }
+                  disabled={checkoutOptionsLoading}
+                  className="mt-2 h-12 w-full rounded-full border border-black/10 bg-white px-4 text-sm outline-none disabled:opacity-50"
+                >
+                  <option value="">
+                    {checkoutOptionsLoading ? "Loading options…" : "Choose an option"}
+                  </option>
+                  {fulfilmentType === "delivery"
+                    ? deliveryZones.map((zone) => (
+                        <option key={zone.id} value={zone.id}>
+                          {zone.name} · GH₵{zone.baseFee.toLocaleString()}
+                          {zone.estimatedDaysMin !== null
+                            ? ` · ${zone.estimatedDaysMin}-${zone.estimatedDaysMax ?? zone.estimatedDaysMin} days`
+                            : ""}
+                        </option>
+                      ))
+                    : shops.map((shop) => (
+                        <option key={shop.id} value={shop.id}>
+                          {shop.name} · {shop.location}
+                        </option>
+                      ))}
+                </select>
+              </fieldset>
+
               <InputIcon icon={<User size={18} />} input={
                 <input
                   value={customerName}
@@ -561,14 +781,62 @@ export default function CartPage() {
                 />
               } />
 
-              <div className="relative">
-                <Home size={18} className="absolute left-5 top-5 text-black/40" />
-                <textarea
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  placeholder="Delivery address"
-                  className="min-h-28 w-full resize-none rounded-3xl border border-black/10 bg-white/90 px-12 py-4 outline-none"
-                />
+              {fulfilmentType === "delivery" && (
+                <div className="relative">
+                  <Home size={18} className="absolute left-5 top-5 text-black/40" />
+                  <textarea
+                    value={deliveryAddress}
+                    onChange={(e) => setDeliveryAddress(e.target.value)}
+                    placeholder="Delivery address and GhanaPost GPS code"
+                    className="min-h-28 w-full resize-none rounded-3xl border border-black/10 bg-white/90 px-12 py-4 outline-none"
+                  />
+                </div>
+              )}
+
+              <div className="rounded-3xl border border-black/10 bg-white/90 p-4">
+                <label htmlFor="promotion-code" className="text-sm font-semibold">
+                  Promotion code
+                </label>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    id="promotion-code"
+                    value={promotionInput}
+                    onChange={(event) => setPromotionInput(event.target.value.toUpperCase())}
+                    placeholder="Enter code"
+                    className="h-12 min-w-0 flex-1 rounded-full border border-black/10 bg-white px-4 text-sm uppercase outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={!promotionInput.trim() || quoteLoading}
+                    onClick={() => {
+                      setAppliedPromotionCode(promotionInput.trim());
+                      setQuoteRevision((revision) => revision + 1);
+                    }}
+                    className="rounded-full bg-black px-5 text-sm font-semibold text-white disabled:opacity-40"
+                  >
+                    Apply
+                  </button>
+                </div>
+                {quote?.promotionMessage && (
+                  <p
+                    role="status"
+                    className={`mt-2 text-sm ${quote.promotionCodeValid ? "text-emerald-700" : "text-red-600"}`}
+                  >
+                    {quote.promotionMessage}
+                  </p>
+                )}
+                {appliedPromotionCode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPromotionInput("");
+                      setAppliedPromotionCode("");
+                    }}
+                    className="mt-2 text-xs font-semibold text-black/55 underline underline-offset-4"
+                  >
+                    Remove code
+                  </button>
+                )}
               </div>
 
               <div className="rounded-3xl bg-white/90 p-5">
@@ -581,15 +849,50 @@ export default function CartPage() {
                   Paystack Online Payment
                 </div>
 
-                <div className="mt-5 flex justify-between gap-4 border-t border-black/10 pt-4 text-lg font-bold">
-                  <span>Total</span>
-                  <span>GH₵{subtotal.toLocaleString()}</span>
+                <div className="mt-5 space-y-2 border-t border-black/10 pt-4 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-black/55">Subtotal</span>
+                    <span>GH₵{(quote?.subtotal ?? subtotal).toLocaleString()}</span>
+                  </div>
+                  {(quote?.discount ?? 0) > 0 && (
+                    <div className="flex justify-between gap-4 text-emerald-700">
+                      <span>Promotion</span>
+                      <span>−GH₵{quote?.discount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-4">
+                    <span className="text-black/55">
+                      {fulfilmentType === "pickup" ? "Collection" : "Delivery"}
+                    </span>
+                    <span>
+                      {quoteLoading
+                        ? "Calculating…"
+                        : (quote?.deliveryFee ?? 0) === 0
+                          ? "Free"
+                          : `GH₵${quote?.deliveryFee.toLocaleString()}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-4 pt-2 text-lg font-bold">
+                    <span>Total</span>
+                    <span>GH₵{(quote?.total ?? subtotal).toLocaleString()}</span>
+                  </div>
                 </div>
+
+                {quote?.split && fulfilmentType === "delivery" && (
+                  <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+                    Your cart will arrive in {quote.shipmentCount} shipments from different branches. The delivery total already includes each shipment.
+                  </p>
+                )}
+                {fulfilmentType === "pickup" && (
+                  <p className="mt-4 text-xs leading-5 text-black/50">
+                    Collection is only confirmed when this branch can reserve the complete cart.
+                  </p>
+                )}
               </div>
 
               <button
                 onClick={createOnlineOrder}
-                disabled={placingOrder}
+                disabled={placingOrder || quoteLoading || !quote}
                 className="h-14 w-full rounded-full bg-black text-sm font-semibold text-white disabled:opacity-50"
               >
                 {placingOrder ? "Processing Payment..." : "Pay Online"}

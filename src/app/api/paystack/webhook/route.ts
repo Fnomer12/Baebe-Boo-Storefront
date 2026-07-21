@@ -1,9 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireServerEnv } from "@/lib/server-env";
+import { finalizeVerifiedOrder } from "@/lib/orders/finalize-paid-order";
 
 function signaturesMatch(rawBody: string, signature: string) {
-  const expected = createHmac("sha512", process.env.PAYSTACK_SECRET_KEY || "")
+  const expected = createHmac("sha512", requireServerEnv("PAYSTACK_SECRET_KEY"))
     .update(rawBody)
     .digest("hex");
   const expectedBuffer = Buffer.from(expected, "utf8");
@@ -19,7 +21,14 @@ export async function POST(request: Request) {
   const rawBody = await request.text();
   const signature = request.headers.get("x-paystack-signature") || "";
 
-  if (!signature || !signaturesMatch(rawBody, signature)) {
+  let validSignature = false;
+  try {
+    validSignature = Boolean(signature) && signaturesMatch(rawBody, signature);
+  } catch {
+    return NextResponse.json({ received: false }, { status: 503 });
+  }
+
+  if (!validSignature) {
     return NextResponse.json({ received: false }, { status: 401 });
   }
 
@@ -30,6 +39,7 @@ export async function POST(request: Request) {
         reference?: string;
         status?: string;
         amount?: number;
+        currency?: string;
         metadata?: { order_id?: string };
       };
     };
@@ -62,14 +72,15 @@ export async function POST(request: Request) {
     }
 
     const expectedAmount = Math.round(Number(order.total_amount) * 100);
-    if (Number(event.data.amount) !== expectedAmount) {
+    if (
+      Number(event.data.amount) !== expectedAmount ||
+      event.data.currency !== "GHS" ||
+      (orderId && orderId !== order.id)
+    ) {
       return NextResponse.json({ received: false }, { status: 400 });
     }
 
-    const { error: finalizeError } = await supabaseAdmin.rpc(
-      "finalize_paid_order",
-      { p_order_id: order.id }
-    );
+    const { error: finalizeError } = await finalizeVerifiedOrder(order.id, reference);
 
     if (finalizeError) {
       return NextResponse.json({ received: false }, { status: 500 });

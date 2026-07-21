@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Baebe Boo Storefront
 
-## Getting Started
+Baebe Boo's mobile-first national storefront, customer account, branch counter,
+and owner administration platform. The implementation follows the construction
+manual in [`public/Baebe_Boo_Website_Construction_Manual.pdf`](public/Baebe_Boo_Website_Construction_Manual.pdf).
 
-First, run the development server:
+## Local development
 
 ```bash
+npm ci
+cp .env.production.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Populate `.env.local` with a Supabase project and Paystack test key. Missing
+public Supabase values fall back to a harmless local placeholder in development;
+production builds fail closed when required secrets are absent.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quality gate
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run test:e2e
+npm run build
+```
 
-## Learn More
+Playwright starts the production server automatically. Install its browser once
+with `npx playwright install chromium`.
 
-To learn more about Next.js, take a look at the following resources:
+## Database
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The normalized commerce schema, row-level security policies, inventory
+reservations, and database tests live under [`supabase/`](supabase/README.md).
+Apply and rehearse the migration against staging before production.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment
 
-## Deploy on Vercel
+The target production hostname is `baebe-boo.jtechinnovations.tech`. See
+[`docs/deployment-runbook.md`](docs/deployment-runbook.md) for the staging,
+production, rollback, DNS, payment, backup, and monitoring checklist.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The CI workflow checks lint, types, unit tests, the production build, and desktop
+and mobile journeys. Deployment remains deliberately gated on environment
+secrets and the operations-tier decision.

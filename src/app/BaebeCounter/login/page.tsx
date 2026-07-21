@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { ShieldCheck } from "lucide-react";
 
@@ -41,7 +42,7 @@ export default function CounterLoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-[#F8F5F0] px-4 text-black">
       <section className="w-full max-w-md rounded-[2.5rem] border border-white/70 bg-white/85 p-8 text-center shadow-xl backdrop-blur-xl">
         <div className="mx-auto mb-6 flex h-28 w-28 items-center justify-center rounded-full bg-[#F8F5F0] shadow-inner">
-          <img src="/baebe-boo.jpg" alt="Baebe Boo" className="h-20 w-20 rounded-full object-cover" />
+          <Image src="/baebe-boo.jpg" alt="Baebe Boo" width={80} height={80} priority className="h-20 w-20 rounded-full object-cover" />
         </div>
         <h1 className="text-3xl font-semibold">Baebe Counter Login</h1>
         <p className="mt-3 text-sm leading-6 text-black/50">

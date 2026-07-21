@@ -83,7 +83,7 @@ export default function AdminLoginPage() {
         </form>
 
         <p className="mt-6 text-center text-xs text-black/40">
-          Password authentication • Protected routes • Role-based access
+          Password + authenticator • Protected routes • Role-based access
         </p>
       </div>
     </main>
