@@ -30,7 +30,9 @@ export async function POST(request: Request) {
     .eq("is_active", true)
     .maybeSingle();
 
-  const authorized = !adminError && Boolean(adminUser);
+  const authorized =
+    (!adminError && Boolean(adminUser)) ||
+    user.app_metadata?.staff_role === "owner";
 
   return NextResponse.json(
     { authorized, email: user.email },

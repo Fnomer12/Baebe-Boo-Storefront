@@ -43,7 +43,10 @@ export default function AdminLoginPage() {
       typeof window === "undefined"
         ? null
         : new URLSearchParams(window.location.search).get("next");
-    const destination = next?.startsWith("/") ? next : "/BaebeAdmin";
+    const destination =
+      next?.startsWith("/BaebeAdmin") && !next.startsWith("//")
+        ? next
+        : "/BaebeAdmin";
     router.replace(destination);
   };
 
