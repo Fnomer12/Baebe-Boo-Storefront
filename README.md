@@ -40,6 +40,8 @@ Apply and rehearse the migration against staging before production.
 The target production hostname is `baebe-boo.jtechinnovations.tech`. See
 [`docs/deployment-runbook.md`](docs/deployment-runbook.md) for the staging,
 production, rollback, DNS, payment, backup, and monitoring checklist.
+The phased completion matrix and remaining external launch inputs are in
+[`docs/implementation-status.md`](docs/implementation-status.md).
 
 The CI workflow checks lint, types, unit tests, the production build, and desktop
 and mobile journeys. Deployment remains deliberately gated on environment
