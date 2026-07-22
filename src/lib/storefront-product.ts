@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
+  catalogProductFromRow,
   fallbackProducts,
   findProduct,
   slugify,
@@ -53,26 +54,12 @@ export const listStorefrontProducts = cache(async (): Promise<StorefrontProduct[
       .eq("is_active", true)
       .order("created_at", { ascending: false });
     if (error) return [];
-    return ((data || []) as ProductRow[]).map((row) => {
-      const category = row.category || "Other";
-      const age = row.age_range || "Ask our team";
-      return {
-        id: row.id,
-        slug: `${slugify(row.name || "product")}-${row.id}`,
-        name: row.name || "Baebe Boo product",
-        category,
-        categorySlug: slugify(category),
-        age,
-        ageSlug: slugify(age.replace("+", "plus")),
-        gender: row.gender || "Unisex",
-        price: Number(row.price),
-        imageUrl: row.image_url || "",
-        description: row.description?.trim() || "Verified product details are available from our team.",
-        colors: [],
-        sizes: [],
-        specifications: [],
-      };
-    });
+    return ((data || []) as ProductRow[])
+      .map((row) => {
+        const product = catalogProductFromRow(row);
+        return product ? { ...product, description: row.description?.trim() || product.description } : null;
+      })
+      .filter((product): product is StorefrontProduct => Boolean(product));
   } catch {
     return [];
   }

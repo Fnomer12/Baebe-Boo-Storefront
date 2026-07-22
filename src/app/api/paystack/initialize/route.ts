@@ -57,8 +57,7 @@ export async function POST(req: Request) {
       (chosenFulfilment === "pickup" && typeof shopId !== "string") ||
       (shopId !== undefined && shopId !== null && typeof shopId !== "string") ||
       (preferredShopId !== undefined && preferredShopId !== null && typeof preferredShopId !== "string") ||
-      (promotionCode !== undefined && promotionCode !== null && typeof promotionCode !== "string") ||
-      (typeof promotionCode === "string" && promotionCode.trim().length > 64)
+      (promotionCode !== undefined && promotionCode !== null && typeof promotionCode !== "string")
     ) {
       return errorResponse("Invalid checkout details.");
     }

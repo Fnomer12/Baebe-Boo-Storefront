@@ -21,11 +21,16 @@ export default function ProductActions({ product }: { product: StorefrontProduct
 
   useEffect(() => {
     recordRecentlyViewed(product.id);
+    const refreshWishlist = () => setWished(productListContains(storefrontKeys.wishlist, product.id));
     const frame = window.requestAnimationFrame(() => {
-      setWished(productListContains(storefrontKeys.wishlist, product.id));
+      refreshWishlist();
       setComparing(productListContains(storefrontKeys.compare, product.id));
     });
-    return () => window.cancelAnimationFrame(frame);
+    window.addEventListener("baebe_wishlist_hydrated", refreshWishlist);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("baebe_wishlist_hydrated", refreshWishlist);
+    };
   }, [product.id]);
 
   useEffect(() => {

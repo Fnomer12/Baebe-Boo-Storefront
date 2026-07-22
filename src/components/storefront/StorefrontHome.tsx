@@ -7,38 +7,9 @@ import { supabase } from "@/lib/supabase";
 import MemberForm from "./MemberForm";
 import ProductCard from "./ProductCard";
 import { StorefrontPage, whatsappUrl } from "./StorefrontChrome";
-import { ageRanges, categories, demoCatalogEnabled, fallbackProducts, fallbackShops, parentingArticles, slugify, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
-
-type ProductRow = {
-  id: string;
-  name: string | null;
-  category: string | null;
-  age_range: string | null;
-  gender: string | null;
-  price: number | string | null;
-  image_url: string | null;
-};
+import { ageRanges, catalogProductFromRow, categories, demoCatalogEnabled, fallbackProducts, fallbackShops, parentingArticles, type PublicCatalogRow, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
 
 type ShopRow = { id: string; name: string | null; location: string | null };
-
-function mapProduct(row: ProductRow, index: number): StorefrontProduct {
-  const base = fallbackProducts[index % fallbackProducts.length];
-  const category = row.category || base.category;
-  const age = row.age_range || base.age;
-  return {
-    ...base,
-    id: row.id,
-    slug: `${slugify(row.name || base.name)}-${row.id}`,
-    name: row.name || base.name,
-    category,
-    categorySlug: slugify(category),
-    age,
-    ageSlug: slugify(age.replace("+", "plus")),
-    gender: row.gender || base.gender,
-    price: Number(row.price) || base.price,
-    imageUrl: row.image_url || "",
-  };
-}
 
 export default function StorefrontHome() {
   const [bestSellers, setBestSellers] = useState(demoCatalogEnabled ? fallbackProducts.slice(0, 4) : []);
@@ -55,11 +26,19 @@ export default function StorefrontHome() {
       ]);
       if (!active) return;
       if (!productResult.error && productResult.data?.length) {
-        const mapped = (productResult.data as ProductRow[]).map(mapProduct);
+        const mapped = (productResult.data as PublicCatalogRow[]).map(catalogProductFromRow).filter((product): product is StorefrontProduct => Boolean(product));
         setNewArrivals(mapped.slice(0, 4));
         if (!bestSellerResult.error && bestSellerResult.data?.length) {
+          const rankedIds = (bestSellerResult.data as Array<{ product_id: string }>).map((entry) => entry.product_id);
           const byId = new Map(mapped.map((product) => [product.id, product]));
-          setBestSellers((bestSellerResult.data as Array<{ product_id: string }>).map((entry) => byId.get(entry.product_id)).filter((product): product is StorefrontProduct => Boolean(product)));
+          const missingIds = rankedIds.filter((id) => !byId.has(id));
+          if (missingIds.length) {
+            const missingResult = await supabase.from("products").select("id,name,category,age_range,gender,price,image_url").in("id", missingIds).eq("is_active", true);
+            if (!missingResult.error) {
+              for (const product of (missingResult.data as PublicCatalogRow[]).map(catalogProductFromRow).filter((item): item is StorefrontProduct => Boolean(item))) byId.set(product.id, product);
+            }
+          }
+          if (active) setBestSellers(rankedIds.map((id) => byId.get(id)).filter((product): product is StorefrontProduct => Boolean(product)));
         } else if (!demoCatalogEnabled) {
           setBestSellers([]);
         }

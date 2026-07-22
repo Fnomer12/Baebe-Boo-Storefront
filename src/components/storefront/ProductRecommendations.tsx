@@ -5,39 +5,9 @@ import { rankRecommendations } from "@/domain/recommendations/rank";
 import { recentlyViewedProductIds } from "@/lib/storefront-state";
 import { supabase } from "@/lib/supabase";
 import ProductCard from "./ProductCard";
-import { demoCatalogEnabled, fallbackProducts, slugify, type StorefrontProduct } from "./catalog-data";
-
-type ProductRow = {
-  id: string;
-  name: string | null;
-  category: string | null;
-  age_range: string | null;
-  gender: string | null;
-  price: number | string | null;
-  image_url: string | null;
-};
+import { catalogProductFromRow, demoCatalogEnabled, fallbackProducts, type PublicCatalogRow, type StorefrontProduct } from "./catalog-data";
 
 type PairingRow = { product_id: string; purchase_count: number | string };
-
-function mapProduct(row: ProductRow, index: number): StorefrontProduct {
-  const base = fallbackProducts[index % fallbackProducts.length];
-  const name = row.name || base.name;
-  const category = row.category || base.category;
-  const age = row.age_range || base.age;
-  return {
-    ...base,
-    id: row.id,
-    slug: `${slugify(name)}-${row.id}`,
-    name,
-    category,
-    categorySlug: slugify(category),
-    age,
-    ageSlug: slugify(age.replace("+", "plus")),
-    gender: row.gender || base.gender,
-    price: Number(row.price) || base.price,
-    imageUrl: row.image_url || "",
-  };
-}
 
 function ProductStrip({ eyebrow, title, products }: { eyebrow: string; title: string; products: StorefrontProduct[] }) {
   if (!products.length) return null;
@@ -64,7 +34,7 @@ export default function ProductRecommendations({ current }: { current: Storefron
         : Promise.resolve({ data: [], error: null });
       const [productsResult, pairingResult] = await Promise.all([productsRequest, pairingRequest]);
       if (!active) return;
-      if (!productsResult.error && productsResult.data?.length) setCatalog((productsResult.data as ProductRow[]).map(mapProduct));
+      if (!productsResult.error && productsResult.data?.length) setCatalog((productsResult.data as PublicCatalogRow[]).map(catalogProductFromRow).filter((product): product is StorefrontProduct => Boolean(product)));
       if (!pairingResult.error && pairingResult.data) setPairings(pairingResult.data as PairingRow[]);
     }
     void load();

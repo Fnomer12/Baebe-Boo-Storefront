@@ -1,8 +1,24 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeCustomerMutation } from "@/lib/account/customer-api";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const mutationSchema = z.object({ productId: z.uuid(), active: z.boolean() });
+
+export async function GET() {
+  const supabase = await createServerSupabaseClient();
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) return NextResponse.json({ productIds: [] }, { status: 401 });
+  const { data, error } = await supabase
+    .from("wishlists")
+    .select("wishlist_items(product_id)")
+    .eq("user_id", authData.user.id);
+  if (error) return NextResponse.json({ message: "Could not load your wishlist." }, { status: 503 });
+  const productIds = (data || []).flatMap((wishlist) =>
+    (wishlist.wishlist_items || []).map((item) => item.product_id),
+  );
+  return NextResponse.json({ productIds: [...new Set(productIds)] });
+}
 
 export async function POST(request: Request) {
   const authorization = await authorizeCustomerMutation(request, "wishlist", 30);

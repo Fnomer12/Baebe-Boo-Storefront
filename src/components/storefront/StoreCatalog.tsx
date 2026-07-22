@@ -5,29 +5,20 @@ import { ArrowDownUp, Search, SlidersHorizontal, Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import ProductCard from "./ProductCard";
 import { PageIntro, StorefrontPage } from "./StorefrontChrome";
-import { ageRanges, categories, demoCatalogEnabled, fallbackProducts, fallbackShops, slugify, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
+import { ageRanges, catalogProductFromRow, categories, demoCatalogEnabled, fallbackProducts, fallbackShops, type PublicCatalogRow, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
 import { addProductToCart } from "@/lib/storefront-state";
 
 type AvailabilityRow = { shop_id: string; is_available: boolean | null; stock_quantity: number | string | null };
-type ProductRow = { id: string; name: string | null; category: string | null; age_range: string | null; gender: string | null; price: number | string | null; image_url: string | null; product_shop_availability: AvailabilityRow[] | null };
+type ProductRow = PublicCatalogRow & { product_shop_availability: AvailabilityRow[] | null };
 type ShopRow = { id: string; name: string | null; location: string | null };
 type CatalogProduct = StorefrontProduct & { stockByShop: Record<string, number> };
 
-function mapProduct(row: ProductRow, index: number): CatalogProduct {
-  const base = fallbackProducts[index % fallbackProducts.length];
+function mapProduct(row: ProductRow): CatalogProduct | null {
+  const product = catalogProductFromRow(row);
+  if (!product) return null;
   const availability = row.product_shop_availability ?? [];
   return {
-    ...base,
-    id: row.id,
-    slug: `${slugify(row.name || base.name)}-${row.id}`,
-    name: row.name || base.name,
-    category: row.category || base.category,
-    categorySlug: slugify(row.category || base.category),
-    age: row.age_range || base.age,
-    ageSlug: slugify((row.age_range || base.age).replace("+", "plus")),
-    gender: row.gender || base.gender,
-    price: Number(row.price) || base.price,
-    imageUrl: row.image_url || "",
+    ...product,
     stockByShop: Object.fromEntries(availability.filter((item) => item.is_available).map((item) => [item.shop_id, Number(item.stock_quantity) || 0])),
   };
 }
@@ -51,7 +42,7 @@ export default function StoreCatalog({ initialQuery, initialSort }: { initialQue
         supabase.from("shops").select("id,name,location").eq("is_active", true).order("created_at", { ascending: true }),
       ]);
       if (!active) return;
-      if (!productResult.error && productResult.data?.length) setProducts((productResult.data as ProductRow[]).map(mapProduct));
+      if (!productResult.error && productResult.data?.length) setProducts((productResult.data as ProductRow[]).map(mapProduct).filter((product): product is CatalogProduct => Boolean(product)));
       if (!shopResult.error && shopResult.data?.length) setShops((shopResult.data as ShopRow[]).map((shop) => ({ id: shop.id, name: shop.name || "Baebe Boo", location: shop.location || "Ghana", hours: "Confirm hours with the store", phone: "" })));
       setLoading(false);
     }

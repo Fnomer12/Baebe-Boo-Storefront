@@ -37,6 +37,16 @@ export type StorefrontShop = {
   phone: string;
 };
 
+export type PublicCatalogRow = {
+  id: string;
+  name: string | null;
+  category: string | null;
+  age_range: string | null;
+  gender: string | null;
+  price: number | string | null;
+  image_url: string | null;
+};
+
 export const demoCatalogEnabled =
   process.env.NODE_ENV === "development" ||
   process.env.NEXT_PUBLIC_ENABLE_DEMO_CATALOG === "true";
@@ -253,6 +263,30 @@ export function slugify(value: string): string {
 
 export function formatPrice(price: number): string {
   return new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 2 }).format(price);
+}
+
+export function catalogProductFromRow(row: PublicCatalogRow): StorefrontProduct | null {
+  const name = row.name?.trim();
+  const price = Number(row.price);
+  if (!row.id || !name || !Number.isFinite(price) || price < 0) return null;
+  const category = row.category?.trim() || "Other";
+  const age = row.age_range?.trim() || "Ask our team";
+  return {
+    id: row.id,
+    slug: `${slugify(name)}-${row.id}`,
+    name,
+    category,
+    categorySlug: slugify(category),
+    age,
+    ageSlug: slugify(age.replace("+", "plus")),
+    gender: row.gender?.trim() || "Ask our team",
+    price,
+    imageUrl: row.image_url || "",
+    description: "Verified product details are available from our team.",
+    colors: [],
+    sizes: [],
+    specifications: [],
+  };
 }
 
 export function findProduct(slug: string): StorefrontProduct | undefined {

@@ -80,7 +80,8 @@ export async function quoteCheckoutPromotions(input: {
     (sum, line) => sum + Math.max(0, line.unitPrice) * Math.max(0, line.quantity),
     0,
   );
-  const normalizedCode = input.promotionCode?.trim().toUpperCase() || null;
+  const requestedCode = input.promotionCode?.trim().toUpperCase() || null;
+  const normalizedCode = requestedCode && requestedCode.length <= 64 ? requestedCode : null;
   const { data: automaticData, error: automaticError } = await supabaseAdmin
     .from("promotions")
     .select("id,name,promotion_type,value,status,starts_at,ends_at,minimum_order_amount,usage_limit,per_customer_limit,stackable,automatic")
@@ -90,7 +91,9 @@ export async function quoteCheckoutPromotions(input: {
 
   let codeRow: CodeRow | null = null;
   let couponRow: PromotionRow | null = null;
-  let invalidCodeReason: string | null = null;
+  let invalidCodeReason: string | null = requestedCode && !normalizedCode
+    ? "That promotion code is not valid."
+    : null;
   if (normalizedCode) {
     const { data, error } = await supabaseAdmin
       .from("promotion_codes")
@@ -197,12 +200,12 @@ export async function quoteCheckoutPromotions(input: {
     };
   });
   const couponApplied = appliedPromotions.some((promotion) => promotion.code);
-  const promotionCodeValid = !normalizedCode || Boolean(couponResult?.promotion);
+  const promotionCodeValid = !requestedCode || Boolean(couponResult?.promotion);
 
   return {
     ...quote,
     appliedPromotions,
-    promotionMessage: normalizedCode
+    promotionMessage: requestedCode
       ? invalidCodeReason
         ? invalidCodeReason
         : couponApplied

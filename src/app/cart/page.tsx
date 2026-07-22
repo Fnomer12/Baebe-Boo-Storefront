@@ -70,6 +70,9 @@ const cleanPrice = (price: number | string) => {
   return Number(price.replace(/[^\d.]/g, "")) || 0;
 };
 
+const cartItemKey = (item: CartItem) =>
+  [item.id, item.variantId || item.color || "default", item.size || "", item.shopId || item.shop?.id || "national"].join(":");
+
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [message, setMessage] = useState("");
@@ -236,8 +239,8 @@ export default function CartPage() {
     setCustomerPhone(`+233${nationalNumber}`);
   };
 
-  const increaseQuantity = async (id: string) => {
-    const item = cartItems.find((cartItem) => cartItem.id === id);
+  const increaseQuantity = async (lineKey: string) => {
+    const item = cartItems.find((cartItem) => cartItemKey(cartItem) === lineKey);
     if (!item) return;
 
     const shopId = item.shop?.id || item.shopId;
@@ -250,7 +253,7 @@ export default function CartPage() {
       }
       updateCart(
         cartItems.map((cartItem) =>
-          cartItem.id === id ? { ...cartItem, quantity: currentQuantity + 1 } : cartItem,
+          cartItemKey(cartItem) === lineKey ? { ...cartItem, quantity: currentQuantity + 1 } : cartItem,
         ),
       );
       return;
@@ -283,7 +286,7 @@ export default function CartPage() {
 
     updateCart(
       cartItems.map((cartItem) =>
-        cartItem.id === id
+        cartItemKey(cartItem) === lineKey
           ? {
               ...cartItem,
               quantity: currentQuantity + 1,
@@ -294,10 +297,10 @@ export default function CartPage() {
     );
   };
 
-  const decreaseQuantity = (id: string) => {
+  const decreaseQuantity = (lineKey: string) => {
     updateCart(
       cartItems.map((item) =>
-        item.id === id
+        cartItemKey(item) === lineKey
           ? {
               ...item,
               quantity: Math.max(1, Number(item.quantity || 1) - 1),
@@ -307,8 +310,8 @@ export default function CartPage() {
     );
   };
 
-  const removeItem = (id: string) => {
-    updateCart(cartItems.filter((item) => item.id !== id));
+  const removeItem = (lineKey: string) => {
+    updateCart(cartItems.filter((item) => cartItemKey(item) !== lineKey));
   };
 
   const validateCheckout = () => {
@@ -530,7 +533,7 @@ export default function CartPage() {
 
                   return (
                    <div
-  key={item.id}
+  key={cartItemKey(item)}
   className="relative rounded-[2rem] bg-white p-4 shadow-sm md:grid md:grid-cols-[180px_1fr_180px] md:gap-6 md:p-6"
 >
   <div className="grid grid-cols-[115px_1fr] gap-4 md:contents">
@@ -577,7 +580,7 @@ export default function CartPage() {
       )}
 
       <button
-        onClick={() => removeItem(item.id)}
+        onClick={() => removeItem(cartItemKey(item))}
         className="mt-5 flex items-center gap-2 text-sm font-semibold text-red-500 md:text-base"
       >
         <Trash2 size={17} />
@@ -593,7 +596,7 @@ export default function CartPage() {
 
     <div className="flex items-center gap-4 rounded-full bg-[#F8F5F0] p-1.5">
       <button
-        onClick={() => decreaseQuantity(item.id)}
+        onClick={() => decreaseQuantity(cartItemKey(item))}
         className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shadow-sm"
       >
         <Minus size={17} />
@@ -604,7 +607,7 @@ export default function CartPage() {
       </span>
 
       <button
-        onClick={() => increaseQuantity(item.id)}
+        onClick={() => increaseQuantity(cartItemKey(item))}
         className="flex h-11 w-11 items-center justify-center rounded-full bg-black text-white shadow-sm"
       >
         <Plus size={18} />

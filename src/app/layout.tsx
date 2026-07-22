@@ -4,6 +4,7 @@ import "./globals.css";
 import ConsentBanner from "@/components/analytics/ConsentBanner";
 import WebVitals from "@/components/analytics/WebVitals";
 import AnalyticsScripts from "@/components/analytics/AnalyticsScripts";
+import WishlistSync from "@/components/account/WishlistSync";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,6 +46,7 @@ export default function RootLayout({
         <WebVitals />
         <AnalyticsScripts />
         <ConsentBanner />
+        <WishlistSync />
       </body>
     </html>
   );
