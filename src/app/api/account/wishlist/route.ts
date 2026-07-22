@@ -14,7 +14,11 @@ export async function GET() {
       .from("wishlists")
       .select("wishlist_items(product_id)")
       .eq("user_id", authData.user.id);
-    if (error) return NextResponse.json({ message: "Could not load your wishlist." }, { status: 503 });
+    // Wishlist hydration is a background read. If the optional wishlist tables
+    // or policies are unavailable in a deployment, keep the storefront usable
+    // and treat the account as having no saved items rather than surfacing a
+    // noisy 5xx response in the browser.
+    if (error) return NextResponse.json({ productIds: [] });
     const productIds = (data || []).flatMap((wishlist) =>
       (wishlist.wishlist_items || []).map((item) => item.product_id),
     );

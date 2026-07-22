@@ -36,7 +36,15 @@ export default function AdminLoginPage() {
       return;
     }
 
-    router.replace("/BaebeAdmin");
+    // Refresh the server tree after the browser client writes the SSR session
+    // cookies, then honour the protected route that sent the user here.
+    router.refresh();
+    const next =
+      typeof window === "undefined"
+        ? null
+        : new URLSearchParams(window.location.search).get("next");
+    const destination = next?.startsWith("/") ? next : "/BaebeAdmin";
+    router.replace(destination);
   };
 
   return (
