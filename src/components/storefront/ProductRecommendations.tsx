@@ -5,7 +5,7 @@ import { rankRecommendations } from "@/domain/recommendations/rank";
 import { recentlyViewedProductIds } from "@/lib/storefront-state";
 import { supabase } from "@/lib/supabase";
 import ProductCard from "./ProductCard";
-import { fallbackProducts, slugify, type StorefrontProduct } from "./catalog-data";
+import { demoCatalogEnabled, fallbackProducts, slugify, type StorefrontProduct } from "./catalog-data";
 
 type ProductRow = {
   id: string;
@@ -50,7 +50,7 @@ function ProductStrip({ eyebrow, title, products }: { eyebrow: string; title: st
 }
 
 export default function ProductRecommendations({ current }: { current: StorefrontProduct }) {
-  const [catalog, setCatalog] = useState<StorefrontProduct[]>(fallbackProducts);
+  const [catalog, setCatalog] = useState<StorefrontProduct[]>(demoCatalogEnabled ? fallbackProducts : []);
   const [pairings, setPairings] = useState<PairingRow[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
 

@@ -12,6 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import AccountSignOut from "@/components/account/AccountSignOut";
+import WishlistSync from "@/components/account/WishlistSync";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -52,6 +53,7 @@ export default async function AccountPage() {
 
   return (
     <main className="min-h-screen bg-[#f8f5f0] px-4 py-10 text-black sm:px-6 sm:py-14">
+      <WishlistSync />
       <div className="mx-auto max-w-6xl">
         <header className="flex flex-wrap items-start justify-between gap-5">
           <div>

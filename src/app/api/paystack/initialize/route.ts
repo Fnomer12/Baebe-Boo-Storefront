@@ -1,27 +1,14 @@
 import { NextResponse } from "next/server";
-import { allocateInventory } from "@/domain/commerce/allocation";
 import { quoteCheckoutPromotions } from "@/lib/checkout/promotions";
+import {
+  CheckoutResolutionError,
+  parseCheckoutItems,
+  resolveCheckoutBasket,
+} from "@/lib/checkout/resolve-basket";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireServerEnv } from "@/lib/server-env";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-
-type CheckoutItem = { productId: string; quantity: number };
-type ProductRow = { id: string; name: string; price: number | string };
-type VariantRow = {
-  id: string;
-  product_id: string;
-  price: number | string;
-  is_default: boolean;
-  is_active: boolean;
-};
-type InventoryRow = {
-  id: string;
-  variant_id: string;
-  shop_id: string;
-  on_hand: number;
-  reserved: number;
-};
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -43,12 +30,13 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { email, name, phone, deliveryAddress, shopId, items, deliveryZoneId, fulfilmentType, promotionCode } = body as {
+    const { email, name, phone, deliveryAddress, shopId, preferredShopId, items, deliveryZoneId, fulfilmentType, promotionCode } = body as {
       email?: unknown;
       name?: unknown;
       phone?: unknown;
       deliveryAddress?: unknown;
       shopId?: unknown;
+      preferredShopId?: unknown;
       items?: unknown;
       deliveryZoneId?: unknown;
       fulfilmentType?: unknown;
@@ -68,109 +56,29 @@ export async function POST(req: Request) {
       (chosenFulfilment === "delivery" && typeof deliveryZoneId !== "string") ||
       (chosenFulfilment === "pickup" && typeof shopId !== "string") ||
       (shopId !== undefined && shopId !== null && typeof shopId !== "string") ||
+      (preferredShopId !== undefined && preferredShopId !== null && typeof preferredShopId !== "string") ||
       (promotionCode !== undefined && promotionCode !== null && typeof promotionCode !== "string") ||
-      (typeof promotionCode === "string" && promotionCode.trim().length > 64) ||
-      !Array.isArray(items) ||
-      items.length === 0 ||
-      items.length > 50
+      (typeof promotionCode === "string" && promotionCode.trim().length > 64)
     ) {
       return errorResponse("Invalid checkout details.");
     }
 
-    const quantities = new Map<string, number>();
-    for (const item of items as CheckoutItem[]) {
-      if (
-        !item ||
-        typeof item.productId !== "string" ||
-        !Number.isInteger(item.quantity) ||
-        item.quantity < 1 ||
-        item.quantity > 100
-      ) {
-        return errorResponse("Invalid cart item.");
-      }
-      quantities.set(item.productId, (quantities.get(item.productId) || 0) + item.quantity);
-    }
-
-    const productIds = [...quantities.keys()];
-    const [{ data: productsData, error: productError }, { data: variantsData, error: variantError }] =
-      await Promise.all([
-        supabaseAdmin.from("products").select("id, name, price").in("id", productIds).eq("is_active", true),
-        supabaseAdmin.from("product_variants").select("id, product_id, price, is_default, is_active").in("product_id", productIds).eq("is_active", true),
-      ]);
-
-    const products = (productsData || []) as ProductRow[];
-    const variants = (variantsData || []) as VariantRow[];
-    if (productError || variantError || products.length !== productIds.length) {
-      return errorResponse("One or more products are no longer available.", 409);
-    }
-
-    const selectedVariants = productIds.map((productId) => {
-      const candidates = variants.filter((variant) => variant.product_id === productId);
-      return candidates.find((variant) => variant.is_default) || candidates[0];
+    const basket = await resolveCheckoutBasket({
+      items: parseCheckoutItems(items),
+      fulfilmentType: chosenFulfilment,
+      pickupShopId: typeof shopId === "string" ? shopId : undefined,
+      preferredShopId: typeof preferredShopId === "string" ? preferredShopId : undefined,
+      deliveryZoneId: typeof deliveryZoneId === "string" ? deliveryZoneId : undefined,
     });
-    if (selectedVariants.some((variant) => !variant)) {
-      return errorResponse("One or more product options are unavailable.", 409);
-    }
-
-    const variantIds = selectedVariants.map((variant) => variant.id);
-    const { data: inventoryData, error: inventoryError } = await supabaseAdmin
-      .from("inventory_levels")
-      .select("id, variant_id, shop_id, on_hand, reserved")
-      .in("variant_id", variantIds);
-    if (inventoryError) return errorResponse("Could not check current inventory.", 503);
-
-    const allInventory = (inventoryData || []) as InventoryRow[];
-    const inventory = typeof shopId === "string"
-      ? allInventory.filter((level) => level.shop_id === shopId)
-      : allInventory;
-    const branchIds = [...new Set(inventory.map((level) => level.shop_id))];
-    const branchStock = branchIds.map((branchId) => ({
-      branchId,
-      stock: Object.fromEntries(
-        inventory
-          .filter((level) => level.shop_id === branchId)
-          .map((level) => [level.variant_id, Math.max(0, Number(level.on_hand) - Number(level.reserved))]),
-      ),
-    }));
-    const requestedLines = selectedVariants.map((variant) => ({
-      variantId: variant.id,
-      quantity: quantities.get(variant.product_id) || 0,
-    }));
-    const allocation = allocateInventory(requestedLines, branchStock);
-    if (allocation.status === "insufficient_stock") {
-      return NextResponse.json(
-        { status: false, message: "One or more items no longer have enough stock.", shortages: allocation.shortages },
-        { status: 409 },
-      );
-    }
-
-    if (chosenFulfilment === "pickup" && allocation.split) {
-      return errorResponse("Click-and-collect requires one branch to hold the full cart.", 409);
-    }
-
-    const merchandiseTotal = selectedVariants.reduce(
-      (sum, variant) => sum + Number(variant.price) * (quantities.get(variant.product_id) || 0),
-      0,
-    );
-    let deliveryFee = 0;
-    if (chosenFulfilment === "delivery" && typeof deliveryZoneId === "string") {
-      const { data: zone, error: zoneError } = await supabaseAdmin
-        .from("delivery_zones")
-        .select("base_fee, free_delivery_threshold")
-        .eq("id", deliveryZoneId)
-        .eq("is_active", true)
-        .maybeSingle();
-      if (zoneError || !zone) return errorResponse("Choose a valid delivery zone.");
-      const qualifiesForFreeDelivery = zone.free_delivery_threshold !== null && merchandiseTotal >= Number(zone.free_delivery_threshold);
-      deliveryFee = qualifiesForFreeDelivery ? 0 : Number(zone.base_fee) * allocation.allocations.length;
-    }
+    const { products, variants: selectedVariants, inventory, allocation, merchandiseTotal, deliveryFee } = basket;
+    const productIds = [...new Set(selectedVariants.map((variant) => variant.productId))];
     const authClient = await createServerSupabaseClient();
     const { data: authData } = await authClient.auth.getUser();
     const promotionQuote = await quoteCheckoutPromotions({
       lines: selectedVariants.map((variant) => ({
         variantId: variant.id,
-        unitPrice: Number(variant.price),
-        quantity: quantities.get(variant.product_id) || 0,
+        unitPrice: variant.price,
+        quantity: variant.quantity,
       })),
       productIds,
       deliveryFee,
@@ -213,12 +121,13 @@ export async function POST(req: Request) {
       .insert(
         selectedVariants.map((variant) => ({
           order_id: order.id,
-          product_id: variant.product_id,
-          product_name: productById.get(variant.product_id)?.name || "Product",
-          quantity: quantities.get(variant.product_id) || 0,
+          product_id: variant.productId,
+          variant_id: variant.id,
+          product_name: productById.get(variant.productId)?.name || "Product",
+          quantity: variant.quantity,
         })),
       )
-      .select("id, product_id");
+      .select("id, product_id, variant_id");
     if (itemError || !insertedItems) throw new Error("Could not prepare order items.");
 
     if (promotionQuote.appliedPromotions.length > 0) {
@@ -288,7 +197,7 @@ export async function POST(req: Request) {
 
       const allocationItems = branch.items.map((item) => {
         const variant = selectedVariants.find((candidate) => candidate.id === item.variantId);
-        const orderItem = insertedItems.find((candidate) => candidate.product_id === variant?.product_id);
+        const orderItem = insertedItems.find((candidate) => candidate.variant_id === variant?.id);
         if (!variant || !orderItem) throw new Error("Could not map fulfilment item.");
         return { allocation_id: fulfilment.id, order_item_id: orderItem.id, variant_id: variant.id, quantity: item.quantity };
       });
@@ -345,13 +254,16 @@ export async function POST(req: Request) {
         promotion_message: promotionQuote.promotionMessage,
       },
     });
-  } catch {
+  } catch (error) {
     if (reservationId) {
       await supabaseAdmin.rpc("release_checkout_reservation", { p_reservation_id: reservationId });
     }
     if (orderId) {
       await supabaseAdmin.from("applied_promotions").delete().eq("order_id", orderId);
       await supabaseAdmin.from("orders").update({ order_status: "payment_failed", payment_status: "failed" }).eq("id", orderId);
+    }
+    if (error instanceof CheckoutResolutionError) {
+      return errorResponse(error.message, error.status);
     }
     return errorResponse("Payment initialization failed.", 500);
   }

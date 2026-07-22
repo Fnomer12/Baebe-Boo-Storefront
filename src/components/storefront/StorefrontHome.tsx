@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import MemberForm from "./MemberForm";
 import ProductCard from "./ProductCard";
 import { StorefrontPage, whatsappUrl } from "./StorefrontChrome";
-import { ageRanges, categories, fallbackProducts, fallbackShops, parentingArticles, slugify, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
+import { ageRanges, categories, demoCatalogEnabled, fallbackProducts, fallbackShops, parentingArticles, slugify, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
 
 type ProductRow = {
   id: string;
@@ -41,19 +41,30 @@ function mapProduct(row: ProductRow, index: number): StorefrontProduct {
 }
 
 export default function StorefrontHome() {
-  const [products, setProducts] = useState(fallbackProducts);
-  const [shops, setShops] = useState<StorefrontShop[]>(fallbackShops);
+  const [bestSellers, setBestSellers] = useState(demoCatalogEnabled ? fallbackProducts.slice(0, 4) : []);
+  const [newArrivals, setNewArrivals] = useState(demoCatalogEnabled ? fallbackProducts.slice(4, 8) : []);
+  const [shops, setShops] = useState<StorefrontShop[]>(demoCatalogEnabled ? fallbackShops : []);
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const [productResult, shopResult] = await Promise.all([
-        supabase.from("products").select("id,name,category,age_range,gender,price,image_url").eq("is_active", true).order("created_at", { ascending: false }).limit(8),
+      const [productResult, shopResult, bestSellerResult] = await Promise.all([
+        supabase.from("products").select("id,name,category,age_range,gender,price,image_url").eq("is_active", true).order("created_at", { ascending: false }).limit(100),
         supabase.from("shops").select("id,name,location").eq("is_active", true).order("created_at", { ascending: true }),
+        supabase.rpc("get_best_selling_products", { p_limit: 4 }),
       ]);
       if (!active) return;
-      if (!productResult.error && productResult.data?.length) setProducts((productResult.data as ProductRow[]).map(mapProduct));
-      if (!shopResult.error && shopResult.data?.length) setShops((shopResult.data as ShopRow[]).map((shop) => ({ id: shop.id, name: shop.name || "Baebe Boo", location: shop.location || "Ghana", hours: "Mon–Sat, 9am–7pm", phone: "+233 00 000 0000" })));
+      if (!productResult.error && productResult.data?.length) {
+        const mapped = (productResult.data as ProductRow[]).map(mapProduct);
+        setNewArrivals(mapped.slice(0, 4));
+        if (!bestSellerResult.error && bestSellerResult.data?.length) {
+          const byId = new Map(mapped.map((product) => [product.id, product]));
+          setBestSellers((bestSellerResult.data as Array<{ product_id: string }>).map((entry) => byId.get(entry.product_id)).filter((product): product is StorefrontProduct => Boolean(product)));
+        } else if (!demoCatalogEnabled) {
+          setBestSellers([]);
+        }
+      }
+      if (!shopResult.error && shopResult.data?.length) setShops((shopResult.data as ShopRow[]).map((shop) => ({ id: shop.id, name: shop.name || "Baebe Boo", location: shop.location || "Ghana", hours: "Confirm hours with the store", phone: "" })));
     }
     void load();
     return () => { active = false; };
@@ -99,17 +110,17 @@ export default function StorefrontHome() {
 
         <section>
           <SectionHeading eyebrow="Loved right now" title="Family favourites" href="/store?sort=featured" />
-          <div className="storefront-product-grid">{products.slice(0, 4).map((product) => <ProductCard key={product.id} product={product} />)}</div>
+          {bestSellers.length ? <div className="storefront-product-grid">{bestSellers.map((product) => <ProductCard key={product.id} product={product} />)}</div> : <p className="text-sm text-black/50">Customer favourites will appear after verified purchases.</p>}
         </section>
 
         <section className="storefront-story-banner">
-          <div className="storefront-story-art"><span>BAEBE</span><span>BOO</span><i>Since 2018</i></div>
+          <div className="storefront-story-art"><span>BAEBE</span><span>BOO</span><i>Chosen with care</i></div>
           <div><p className="storefront-eyebrow">Our promise</p><h2>Chosen like a parent would.</h2><p>We believe shopping for a child should feel joyful, reassuring and beautifully simple. Every Baebe Boo collection is selected for real family life—with comfort, quality and wonder at heart.</p><Link href="/parenting" className="storefront-secondary-button mt-5">Meet the Baebe Boo family <ArrowRight size={17} /></Link></div>
         </section>
 
         <section>
           <SectionHeading eyebrow="Just arrived" title="Fresh little finds" href="/store?sort=newest" />
-          <div className="storefront-product-grid">{products.slice(4, 8).map((product) => <ProductCard key={product.id} product={product} />)}</div>
+          {newArrivals.length ? <div className="storefront-product-grid">{newArrivals.map((product) => <ProductCard key={product.id} product={product} />)}</div> : <p className="text-sm text-black/50">New verified products are being prepared.</p>}
         </section>
 
         <section className="storefront-reviews">

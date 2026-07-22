@@ -76,6 +76,9 @@ create unique index if not exists product_variants_one_default
   on public.product_variants(product_id) where is_default;
 create index if not exists product_variants_product_idx on public.product_variants(product_id);
 
+alter table public.order_items
+  add column if not exists variant_id uuid references public.product_variants(id) on delete set null;
+
 create table if not exists public.product_media (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
@@ -747,8 +750,11 @@ set search_path = pg_catalog, public, private
 as $function$
 declare
   v_payment_status text;
+  v_customer_user_id uuid;
+  v_reward_points bigint;
+  v_reward_inserted integer;
 begin
-  select payment_status into v_payment_status
+  select payment_status, customer_user_id into v_payment_status, v_customer_user_id
   from public.orders
   where id = p_order_id
   for update;
@@ -792,6 +798,44 @@ begin
   set payment_status = 'paid', order_status = 'received',
       payment_date = now(), updated_at = now()
   where id = p_order_id;
+
+  -- One point is earned per paid cedi and redeems at 100 points per cedi:
+  -- an effective 1% purchase reward. Delivery charges do not earn points.
+  if v_customer_user_id is not null then
+    select floor(greatest(
+      orders.total_amount - coalesce(sum(allocations.delivery_fee), 0),
+      0
+    ))::bigint
+    into v_reward_points
+    from public.orders orders
+    left join public.fulfilment_allocations allocations on allocations.order_id = orders.id
+    where orders.id = p_order_id
+    group by orders.total_amount;
+
+    if coalesce(v_reward_points, 0) > 0 then
+      insert into public.reward_accounts (user_id)
+      values (v_customer_user_id)
+      on conflict (user_id) do nothing;
+
+      insert into public.reward_ledger (
+        user_id, order_id, entry_type, points, status, reason,
+        source_key, available_at, metadata
+      ) values (
+        v_customer_user_id, p_order_id, 'earn', v_reward_points, 'available',
+        '1% purchase reward', 'order:' || p_order_id::text || ':purchase', now(),
+        jsonb_build_object('rate', '1%', 'delivery_excluded', true)
+      ) on conflict (source_key) do nothing;
+      get diagnostics v_reward_inserted = row_count;
+
+      if v_reward_inserted = 1 then
+        update public.reward_accounts
+        set available_points = available_points + v_reward_points,
+            lifetime_points = lifetime_points + v_reward_points,
+            updated_at = now()
+        where user_id = v_customer_user_id;
+      end if;
+    end if;
+  end if;
 end;
 $function$;
 
@@ -967,6 +1011,26 @@ as $function$
 $function$;
 revoke all on function public.get_frequently_bought_together(uuid, integer) from public;
 grant execute on function public.get_frequently_bought_together(uuid, integer)
+  to anon, authenticated, service_role;
+
+create or replace function public.get_best_selling_products(p_limit integer default 8)
+returns table (product_id uuid, purchase_count bigint)
+language sql
+security definer
+stable
+set search_path = pg_catalog, public
+as $function$
+  select items.product_id, sum(items.quantity)::bigint as purchase_count
+  from public.order_items items
+  join public.orders orders on orders.id = items.order_id
+  where orders.payment_status = 'paid'
+    and items.product_id is not null
+  group by items.product_id
+  order by purchase_count desc, items.product_id
+  limit least(greatest(coalesce(p_limit, 8), 1), 24)
+$function$;
+revoke all on function public.get_best_selling_products(integer) from public;
+grant execute on function public.get_best_selling_products(integer)
   to anon, authenticated, service_role;
 
 -- Harden the compatibility helper and its legacy public-read policies. Anonymous

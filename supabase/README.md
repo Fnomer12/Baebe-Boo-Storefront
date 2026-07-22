@@ -27,8 +27,8 @@ normalized reservation and legacy availability models atomically.
   deterministic order and returns the reservation UUID.
 - `release_checkout_reservation(uuid)` releases an active reservation.
 - `finalize_checkout_reservation(uuid, uuid)` confirms normalized inventory,
-  synchronizes legacy branch availability per allocation, and marks payment in
-  one split-fulfilment-safe transaction.
+  synchronizes legacy branch availability per allocation, posts the idempotent
+  1% purchase reward, and marks payment in one split-fulfilment-safe transaction.
 - `transition_order(uuid, text)` enforces the order state machine and audit trail.
 - `complete_counter_sale(uuid, jsonb, text, text, text)` completes a branch sale.
 - `join_family(text, text, text, text, text, date, text, text)` deduplicates family
@@ -49,7 +49,7 @@ accept authenticated staff after checking protected authorization data.
 - Staff authorization accepts legacy `admin_users` boss records temporarily; move
   every staff role to `app_metadata.staff_role`, then remove that bridge later.
 - Promotion calculation is server-owned and the database stores the applied snapshot.
-  Reward posting remains a server-domain responsibility.
+  Purchase rewards exclude delivery and post exactly once using a ledger source key.
 - Promotion usage limits are checked at quote and initialization time. There is a
   narrow concurrency window before Paystack capture; a captured order is honored
   and recorded rather than stranded. A future promotion-hold model can close it.

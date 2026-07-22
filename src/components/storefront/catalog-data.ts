@@ -15,6 +15,13 @@ export type StorefrontProduct = {
   colors: string[];
   sizes: string[];
   specifications: Array<{ label: string; value: string }>;
+  variants?: Array<{
+    id: string;
+    title: string;
+    color?: string;
+    size?: string;
+    price: number;
+  }>;
   media?: Array<{
     type: "image" | "video" | "model_3d";
     url: string;
@@ -30,6 +37,10 @@ export type StorefrontShop = {
   phone: string;
 };
 
+export const demoCatalogEnabled =
+  process.env.NODE_ENV === "development" ||
+  process.env.NEXT_PUBLIC_ENABLE_DEMO_CATALOG === "true";
+
 export const categories = [
   { name: "Baby Clothing", slug: "baby-clothing", emoji: "🧸", tone: "pink" },
   { name: "Baby Shoes", slug: "baby-shoes", emoji: "👟", tone: "blue" },
@@ -39,6 +50,7 @@ export const categories = [
   { name: "Nursery", slug: "nursery", emoji: "🌙", tone: "blue" },
   { name: "Gift Sets", slug: "gift-sets", emoji: "🎁", tone: "pink" },
   { name: "Maternity", slug: "maternity", emoji: "🤍", tone: "mint" },
+  { name: "Clearance", slug: "clearance", emoji: "✨", tone: "gold" },
 ] as const;
 
 export const ageRanges = [

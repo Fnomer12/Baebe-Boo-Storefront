@@ -17,6 +17,7 @@ export type StorefrontCartItem = {
   price: number;
   imageUrl: string;
   quantity: number;
+  variantId?: string;
   color?: string;
   size?: string;
   shop?: StorefrontShop;
@@ -51,10 +52,10 @@ export function selectedStore(): StorefrontShop | undefined {
   };
 }
 
-export function addProductToCart(product: StorefrontProduct, options: { color?: string; size?: string; shop?: StorefrontShop; stockAvailable?: number } = {}): number {
+export function addProductToCart(product: StorefrontProduct, options: { color?: string; size?: string; variantId?: string; unitPrice?: number; shop?: StorefrontShop; stockAvailable?: number } = {}): number {
   const value = readUnknown(storefrontKeys.cart);
   const cart = Array.isArray(value) ? value.filter((item): item is StorefrontCartItem => Boolean(item && typeof item === "object" && "id" in item)) : [];
-  const matchIndex = cart.findIndex((item) => item.id === product.id && item.color === options.color && item.size === options.size && item.shopId === options.shop?.id);
+  const matchIndex = cart.findIndex((item) => item.id === product.id && item.variantId === options.variantId && item.color === options.color && item.size === options.size && item.shopId === options.shop?.id);
   const updated = [...cart];
   if (matchIndex >= 0) {
     const current = updated[matchIndex];
@@ -67,9 +68,10 @@ export function addProductToCart(product: StorefrontProduct, options: { color?: 
       category: product.category,
       age: product.age,
       gender: product.gender,
-      price: product.price,
+      price: options.unitPrice ?? product.price,
       imageUrl: product.imageUrl,
       quantity: 1,
+      variantId: options.variantId,
       color: options.color,
       size: options.size,
       shop: options.shop,

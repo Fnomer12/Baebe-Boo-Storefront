@@ -5,7 +5,7 @@ import { ArrowDownUp, Search, SlidersHorizontal, Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import ProductCard from "./ProductCard";
 import { PageIntro, StorefrontPage } from "./StorefrontChrome";
-import { ageRanges, categories, fallbackProducts, fallbackShops, slugify, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
+import { ageRanges, categories, demoCatalogEnabled, fallbackProducts, fallbackShops, slugify, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
 import { addProductToCart } from "@/lib/storefront-state";
 
 type AvailabilityRow = { shop_id: string; is_available: boolean | null; stock_quantity: number | string | null };
@@ -33,8 +33,8 @@ function mapProduct(row: ProductRow, index: number): CatalogProduct {
 }
 
 export default function StoreCatalog({ initialQuery, initialSort }: { initialQuery: string; initialSort: string }) {
-  const [products, setProducts] = useState<CatalogProduct[]>(fallbackProducts.map((product) => ({ ...product, stockByShop: {} })));
-  const [shops, setShops] = useState<StorefrontShop[]>(fallbackShops);
+  const [products, setProducts] = useState<CatalogProduct[]>(demoCatalogEnabled ? fallbackProducts.map((product) => ({ ...product, stockByShop: {} })) : []);
+  const [shops, setShops] = useState<StorefrontShop[]>(demoCatalogEnabled ? fallbackShops : []);
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState("all");
   const [age, setAge] = useState("all");
@@ -52,7 +52,7 @@ export default function StoreCatalog({ initialQuery, initialSort }: { initialQue
       ]);
       if (!active) return;
       if (!productResult.error && productResult.data?.length) setProducts((productResult.data as ProductRow[]).map(mapProduct));
-      if (!shopResult.error && shopResult.data?.length) setShops((shopResult.data as ShopRow[]).map((shop) => ({ id: shop.id, name: shop.name || "Baebe Boo", location: shop.location || "Ghana", hours: "Mon–Sat, 9am–7pm", phone: "+233 00 000 0000" })));
+      if (!shopResult.error && shopResult.data?.length) setShops((shopResult.data as ShopRow[]).map((shop) => ({ id: shop.id, name: shop.name || "Baebe Boo", location: shop.location || "Ghana", hours: "Confirm hours with the store", phone: "" })));
       setLoading(false);
     }
     void load();

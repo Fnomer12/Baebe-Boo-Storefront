@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { allocateInventory } from "./allocation";
 
 describe("allocateInventory", () => {
+  it("uses the preferred branch when it can fulfil the complete order", () => {
+    const result = allocateInventory(
+      [{ variantId: "romper-small", quantity: 1 }],
+      [
+        { branchId: "accra", stock: { "romper-small": 2 } },
+        { branchId: "kumasi", stock: { "romper-small": 2 } },
+      ],
+      { preferredBranchId: "kumasi" },
+    );
+
+    expect(result.status).toBe("allocated");
+    expect(result.allocations[0]?.branchId).toBe("kumasi");
+  });
+
   it("prefers the single branch that can fulfil the whole cart", () => {
     const result = allocateInventory(
       [

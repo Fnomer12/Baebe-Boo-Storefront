@@ -8,7 +8,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const sections = {
   orders: { title: "Order history", description: "Track deliveries, collections and past purchases." },
-  rewards: { title: "Baebe Boo Rewards", description: "Earn 1 point for every GH₵1 and redeem rewards on future orders." },
+  rewards: { title: "Baebe Boo Rewards", description: "Earn 1 point for every paid GH₵1 in merchandise—an effective 1% reward value." },
   addresses: { title: "Saved addresses", description: "Manage delivery details and GhanaPost GPS addresses." },
   wishlist: { title: "Wishlist", description: "Keep your family favourites together across devices." },
   registries: { title: "Gift registries", description: "Plan baby showers, birthdays and thoughtful gift lists." },
@@ -49,7 +49,7 @@ export default async function AccountSectionPage({ params }: { params: Promise<{
     const result = await supabase.from("customer_addresses").select("id, label, recipient_name, phone, address_line_1, address_line_2, city, region, digital_address, delivery_instructions, is_default").eq("user_id", data.user.id).order("is_default", { ascending: false }).order("updated_at", { ascending: false });
     addresses = (result.data || []) as SavedAddress[];
   } else if (section === "wishlist") {
-    const result = await supabase.from("wishlists").select("name, is_public, created_at").eq("user_id", data.user.id);
+    const result = await supabase.from("wishlists").select("name, is_public, created_at, wishlist_items(product_id, products(name))").eq("user_id", data.user.id);
     records = (result.data || []) as Array<Record<string, unknown>>;
   } else if (section === "registries") {
     const result = await supabase.from("gift_registries").select("title, event_date, status, created_at").eq("user_id", data.user.id);

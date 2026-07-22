@@ -33,9 +33,16 @@ export type AllocationResult =
 export function allocateInventory(
   lines: CartLine[],
   branches: BranchStock[],
+  options: { preferredBranchId?: string } = {},
 ): AllocationResult {
   const normalizedLines = lines.filter((line) => line.quantity > 0);
-  const singleBranch = branches.find((branch) =>
+  const orderedBranches = options.preferredBranchId
+    ? [...branches].sort((left, right) =>
+        Number(right.branchId === options.preferredBranchId) -
+        Number(left.branchId === options.preferredBranchId),
+      )
+    : branches;
+  const singleBranch = orderedBranches.find((branch) =>
     normalizedLines.every(
       (line) => (branch.stock[line.variantId] ?? 0) >= line.quantity,
     ),
@@ -77,7 +84,7 @@ export function allocateInventory(
   const remaining = new Map(
     normalizedLines.map((line) => [line.variantId, line.quantity]),
   );
-  const rankedBranches = [...branches].sort((left, right) => {
+  const rankedBranches = [...orderedBranches].sort((left, right) => {
     const score = (branch: BranchStock) =>
       normalizedLines.reduce(
         (total, line) =>
@@ -85,7 +92,9 @@ export function allocateInventory(
           Math.min(line.quantity, Math.max(0, branch.stock[line.variantId] ?? 0)),
         0,
       );
-    return score(right) - score(left);
+    return score(right) - score(left) ||
+      Number(right.branchId === options.preferredBranchId) -
+      Number(left.branchId === options.preferredBranchId);
   });
   const allocations: BranchAllocation[] = [];
 

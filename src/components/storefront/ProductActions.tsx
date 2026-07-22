@@ -45,7 +45,20 @@ export default function ProductActions({ product }: { product: StorefrontProduct
       return;
     }
     const shop = selectedStore();
-    addProductToCart(product, { color, size, shop });
+    const matchingVariant = product.variants?.find((variant) =>
+      (!variant.color || variant.color === color) && (!variant.size || variant.size === size),
+    );
+    if (product.variants?.length && !matchingVariant) {
+      setMessage("That colour and size combination is not available.");
+      return;
+    }
+    addProductToCart(product, {
+      color,
+      size,
+      variantId: matchingVariant?.id,
+      unitPrice: matchingVariant?.price,
+      shop,
+    });
     setMessage(shop ? `Added to your ${shop.name} bag.` : "Added to your bag. We’ll confirm the best fulfilment location at checkout.");
     if (buyNow) window.location.assign("/cart");
   }
@@ -54,6 +67,13 @@ export default function ProductActions({ product }: { product: StorefrontProduct
     const result = toggleProductList(storefrontKeys.wishlist, product.id);
     setWished(result.active);
     setMessage(result.active ? "Saved to your wishlist." : "Removed from your wishlist.");
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(product.id)) {
+      void fetch("/api/account/wishlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: product.id, active: result.active }),
+      });
+    }
   }
 
   function toggleCompare() {
@@ -67,8 +87,8 @@ export default function ProductActions({ product }: { product: StorefrontProduct
   }
   return (
     <div className="space-y-6">
-      <fieldset><legend className="mb-3 text-xs font-bold uppercase tracking-[0.16em]">Colour: <span className="font-medium text-black/50">{color}</span></legend><div className="flex flex-wrap gap-2">{product.colors.map((item) => <button type="button" key={item} onClick={() => setColor(item)} className={`rounded-full border px-4 py-2.5 text-sm ${color === item ? "border-black bg-black text-white" : "border-black/10 bg-white"}`}>{item}</button>)}</div></fieldset>
-      <fieldset><legend className="mb-3 text-xs font-bold uppercase tracking-[0.16em]">Size: <span className="font-medium text-black/50">{size}</span></legend><div className="flex flex-wrap gap-2">{product.sizes.map((item) => <button type="button" key={item} onClick={() => setSize(item)} className={`rounded-full border px-4 py-2.5 text-sm ${size === item ? "border-black bg-black text-white" : "border-black/10 bg-white"}`}>{item}</button>)}</div></fieldset>
+      {product.colors.length > 0 && <fieldset><legend className="mb-3 text-xs font-bold uppercase tracking-[0.16em]">Colour: <span className="font-medium text-black/50">{color}</span></legend><div className="flex flex-wrap gap-2">{product.colors.map((item) => <button type="button" key={item} onClick={() => setColor(item)} className={`rounded-full border px-4 py-2.5 text-sm ${color === item ? "border-black bg-black text-white" : "border-black/10 bg-white"}`}>{item}</button>)}</div></fieldset>}
+      {product.sizes.length > 0 && <fieldset><legend className="mb-3 text-xs font-bold uppercase tracking-[0.16em]">Size: <span className="font-medium text-black/50">{size}</span></legend><div className="flex flex-wrap gap-2">{product.sizes.map((item) => <button type="button" key={item} onClick={() => setSize(item)} className={`rounded-full border px-4 py-2.5 text-sm ${size === item ? "border-black bg-black text-white" : "border-black/10 bg-white"}`}>{item}</button>)}</div></fieldset>}
       <div className="flex items-center gap-2 rounded-2xl bg-[#f5eee5] px-4 py-3 text-sm text-[#704d38]"><Zap size={17} /><span>{availability === "in_stock" ? <><strong>In stock.</strong> Available across our fulfilment network.</> : availability === "low_stock" ? <><strong>Low stock.</strong> Order soon while it is still available.</> : availability === "out_of_stock" ? <><strong>Out of stock.</strong> Check back soon or ask our team for help.</> : availability === "loading" ? "Checking live availability…" : <><strong>Availability checked at checkout.</strong> We’ll confirm the best fulfilment location.</>}</span></div>
       <div className="grid gap-3 sm:grid-cols-2">
         <button type="button" disabled={availability === "out_of_stock"} onClick={() => addToBag(false)} className="storefront-primary-button disabled:cursor-not-allowed disabled:opacity-45"><ShoppingBag size={18} /> Add to bag</button>

@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { BadgeCheck, Check, RotateCcw, ShieldCheck, Star, Truck } from "lucide-react";
 import ProductActions from "@/components/storefront/ProductActions";
 import ProductGallery from "@/components/storefront/ProductGallery";
 import ProductRecommendations from "@/components/storefront/ProductRecommendations";
 import ConversionPrompts from "@/components/storefront/ConversionPrompts";
 import { StorefrontPage } from "@/components/storefront/StorefrontChrome";
-import { formatPrice } from "@/components/storefront/catalog-data";
+import { demoCatalogEnabled, formatPrice } from "@/components/storefront/catalog-data";
 import { loadStorefrontProduct } from "@/lib/storefront-product";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const { product } = await loadStorefrontProduct(slug);
+  const { product, found } = await loadStorefrontProduct(slug);
+  if (!found && !demoCatalogEnabled) return { title: "Product not found | Baebe Boo" };
   return { title: `${product.name} | Baebe Boo`, description: product.description };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { product, reviews } = await loadStorefrontProduct(slug);
+  const { product, reviews, found } = await loadStorefrontProduct(slug);
+  if (!found && !demoCatalogEnabled) notFound();
   const reviewAverage = reviews.length
     ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
     : null;

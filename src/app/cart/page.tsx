@@ -53,8 +53,11 @@ type CartItem = {
   age?: string;
   ageRange?: string;
   gender: string;
+  color?: string;
+  size?: string;
   price: number | string;
   quantity: number;
+  variantId?: string;
   imageUrl?: string;
   shop?: Shop;
   shopId?: string;
@@ -157,11 +160,13 @@ export default function CartPage() {
           body: JSON.stringify({
             items: cartItems.map((item) => ({
               productId: item.id,
+              variantId: item.variantId,
               quantity: Number(item.quantity || 1),
             })),
             fulfilmentType,
             deliveryZoneId: fulfilmentType === "delivery" ? deliveryZoneId : undefined,
             shopId: fulfilmentType === "pickup" ? pickupShopId : undefined,
+            preferredShopId: fulfilmentType === "delivery" ? selectedShop?.id : undefined,
             promotionCode: appliedPromotionCode || undefined,
           }),
         });
@@ -188,6 +193,7 @@ export default function CartPage() {
     fulfilmentType,
     pickupShopId,
     quoteRevision,
+    selectedShop?.id,
     showMessage,
   ]);
 
@@ -375,9 +381,11 @@ export default function CartPage() {
           fulfilmentType,
           deliveryZoneId: fulfilmentType === "delivery" ? deliveryZoneId : undefined,
           shopId: fulfilmentType === "pickup" ? pickupShopId : undefined,
+          preferredShopId: fulfilmentType === "delivery" ? selectedShop?.id : undefined,
           promotionCode: appliedPromotionCode || undefined,
           items: cartSnapshot.map((item) => ({
             productId: item.id,
+            variantId: item.variantId,
             quantity: Number(item.quantity || 1),
           })),
         }),
@@ -555,6 +563,11 @@ export default function CartPage() {
       <p className="mt-3 text-sm text-black/50 md:text-base">
         {item.ageRange || item.age} · {item.gender}
       </p>
+      {(item.color || item.size) && (
+        <p className="mt-2 text-sm font-semibold text-black/60">
+          {[item.color, item.size].filter(Boolean).join(" · ")}
+        </p>
+      )}
 
       {item.shop && (
         <p className="mt-3 flex items-center gap-1 text-sm font-semibold text-black/45">

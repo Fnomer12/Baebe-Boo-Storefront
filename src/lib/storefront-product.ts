@@ -21,6 +21,7 @@ type ProductRow = {
 };
 
 type VariantRow = {
+  id: string;
   title: string;
   option_values: unknown;
   price: number | string;
@@ -43,6 +44,40 @@ export type PublicProductReview = {
   verified: boolean;
 };
 
+export const listStorefrontProducts = cache(async (): Promise<StorefrontProduct[]> => {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("products")
+      .select("id,name,category,age_range,gender,price,image_url,description")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+    if (error) return [];
+    return ((data || []) as ProductRow[]).map((row) => {
+      const category = row.category || "Other";
+      const age = row.age_range || "Ask our team";
+      return {
+        id: row.id,
+        slug: `${slugify(row.name || "product")}-${row.id}`,
+        name: row.name || "Baebe Boo product",
+        category,
+        categorySlug: slugify(category),
+        age,
+        ageSlug: slugify(age.replace("+", "plus")),
+        gender: row.gender || "Unisex",
+        price: Number(row.price),
+        imageUrl: row.image_url || "",
+        description: row.description?.trim() || "Verified product details are available from our team.",
+        colors: [],
+        sizes: [],
+        specifications: [],
+      };
+    });
+  } catch {
+    return [];
+  }
+});
+
 const uuidAtEnd = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function fallbackForSlug(slug: string): StorefrontProduct {
@@ -60,13 +95,13 @@ function fallbackForSlug(slug: string): StorefrontProduct {
   };
 }
 
-function optionStrings(rows: VariantRow[], key: string): string[] {
+function optionStrings(rows: VariantRow[], ...keys: string[]): string[] {
   const values = rows.flatMap((row) => {
     if (!row.option_values || typeof row.option_values !== "object" || Array.isArray(row.option_values)) {
       return [];
     }
     const match = Object.entries(row.option_values).find(
-      ([name]) => name.toLowerCase() === key,
+      ([name]) => keys.includes(name.toLowerCase()),
     )?.[1];
     return typeof match === "string" && match.trim() ? [match.trim()] : [];
   });
@@ -76,7 +111,7 @@ function optionStrings(rows: VariantRow[], key: string): string[] {
 export const loadStorefrontProduct = cache(async (slug: string) => {
   const fallback = fallbackForSlug(slug);
   const productId = slug.match(uuidAtEnd)?.[0];
-  if (!productId) return { product: fallback, reviews: [] as PublicProductReview[] };
+  if (!productId) return { product: fallback, reviews: [] as PublicProductReview[], found: false };
 
   try {
     const supabase = await createServerSupabaseClient();
@@ -89,7 +124,7 @@ export const loadStorefrontProduct = cache(async (slug: string) => {
         .maybeSingle(),
       supabase
         .from("product_variants")
-        .select("title,option_values,price,compare_at_price,is_default")
+        .select("id,title,option_values,price,compare_at_price,is_default")
         .eq("product_id", productId)
         .eq("is_active", true),
       supabase
@@ -108,7 +143,7 @@ export const loadStorefrontProduct = cache(async (slug: string) => {
     ]);
 
     if (productResult.error || !productResult.data) {
-      return { product: fallback, reviews: [] as PublicProductReview[] };
+      return { product: fallback, reviews: [] as PublicProductReview[], found: false };
     }
 
     const row = productResult.data as ProductRow;
@@ -127,8 +162,24 @@ export const loadStorefrontProduct = cache(async (slug: string) => {
     ].filter((item, index, all) => all.findIndex((candidate) => candidate.url === item.url) === index);
     const category = row.category || fallback.category;
     const age = row.age_range || fallback.age;
-    const colors = optionStrings(variants, "color");
+    const colors = optionStrings(variants, "color", "colour");
     const sizes = optionStrings(variants, "size");
+    const mappedVariants = variants.map((variant) => {
+      const options = variant.option_values && typeof variant.option_values === "object" && !Array.isArray(variant.option_values)
+        ? Object.fromEntries(Object.entries(variant.option_values).map(([key, value]) => [key.toLowerCase(), value]))
+        : {};
+      return {
+        id: variant.id,
+        title: variant.title,
+        color: typeof (options.color ?? options.colour) === "string" ? String(options.color ?? options.colour) : undefined,
+        size: typeof options.size === "string"
+          ? options.size
+          : options.color || options.colour
+            ? undefined
+            : variant.title === "Default Title" ? undefined : variant.title,
+        price: Number(variant.price),
+      };
+    });
     const product: StorefrontProduct = {
       ...fallback,
       id: row.id,
@@ -144,9 +195,15 @@ export const loadStorefrontProduct = cache(async (slug: string) => {
         ? Number(defaultVariant.compare_at_price)
         : undefined,
       imageUrl: media.find((item) => item.type === "image")?.url || "",
-      description: row.description?.trim() || fallback.description,
-      colors: colors.length ? colors : fallback.colors,
-      sizes: sizes.length ? sizes : variants.map((variant) => variant.title).filter(Boolean),
+      badge: undefined,
+      description: row.description?.trim() || "Verified product details are available from our team.",
+      colors,
+      sizes: sizes.length
+        ? sizes
+        : colors.length
+          ? []
+          : variants.map((variant) => variant.title).filter((title) => title && title !== "Default Title"),
+      variants: mappedVariants,
       media,
       specifications: [
         { label: "Category", value: category },
@@ -166,8 +223,8 @@ export const loadStorefrontProduct = cache(async (slug: string) => {
           verified: review.is_verified_purchase === true,
         }));
 
-    return { product, reviews };
+    return { product, reviews, found: true };
   } catch {
-    return { product: fallback, reviews: [] as PublicProductReview[] };
+    return { product: fallback, reviews: [] as PublicProductReview[], found: false };
   }
 });

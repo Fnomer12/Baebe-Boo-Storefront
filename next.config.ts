@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
       "img-src 'self' data: blob: https://*.supabase.co",
       "font-src 'self' data: https://fonts.gstatic.com",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.paystack.co https://www.google-analytics.com https://analytics.google.com https://www.facebook.com https://analytics.tiktok.com https://www.clarity.ms",
-      "frame-src https://checkout.paystack.com",
+      "frame-src https://checkout.paystack.com https://www.openstreetmap.org",
       "object-src 'none'",
       "base-uri 'self'",
       "frame-ancestors 'self'",

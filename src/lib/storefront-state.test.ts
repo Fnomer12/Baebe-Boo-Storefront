@@ -8,9 +8,9 @@ describe("storefront persistence", () => {
   it("adds a national item without inventing a branch and broadcasts the cart update", () => {
     const listener = vi.fn();
     window.addEventListener("baebe_cart_updated", listener);
-    addProductToCart(fallbackProducts[0], { color: "Cream", size: "0–3M" });
+    addProductToCart(fallbackProducts[0], { color: "Cream", size: "0–3M", variantId: "variant-cream-0-3", unitPrice: 199 });
     const stored = JSON.parse(window.localStorage.getItem(storefrontKeys.cart) || "[]") as Array<Record<string, unknown>>;
-    expect(stored[0]).toMatchObject({ id: fallbackProducts[0].id, fulfilment: "national", color: "Cream", size: "0–3M" });
+    expect(stored[0]).toMatchObject({ id: fallbackProducts[0].id, variantId: "variant-cream-0-3", fulfilment: "national", color: "Cream", size: "0–3M", price: 199 });
     expect(stored[0]).not.toHaveProperty("shopId");
     expect(listener).toHaveBeenCalledOnce();
     window.removeEventListener("baebe_cart_updated", listener);

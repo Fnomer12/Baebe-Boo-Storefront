@@ -38,6 +38,9 @@ begin
   if not has_function_privilege('service_role', 'public.join_family(text,text,text,text,text,date,text,text)', 'execute') then
     raise exception 'service role cannot enroll family members';
   end if;
+  if not has_function_privilege('anon', 'public.get_best_selling_products(integer)', 'execute') then
+    raise exception 'storefront cannot read aggregate best sellers';
+  end if;
 end
 $test$;
 
