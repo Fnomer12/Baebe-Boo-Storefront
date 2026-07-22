@@ -5,16 +5,16 @@ import { useEffect, useState } from "react";
 type Consent = "all" | "essential";
 
 export default function ConsentBanner() {
-  const [choice, setChoice] = useState<Consent | null>(null);
+  const [choice, setChoice] = useState<Consent | null>();
 
   useEffect(() => {
     const stored = window.localStorage.getItem("baebe_consent_v1");
-    if (stored === "all" || stored === "essential") {
-      queueMicrotask(() => setChoice(stored));
-    }
+    queueMicrotask(() =>
+      setChoice(stored === "all" || stored === "essential" ? stored : null),
+    );
   }, []);
 
-  if (choice) return null;
+  if (choice !== null) return null;
 
   function save(value: Consent) {
     window.localStorage.setItem("baebe_consent_v1", value);

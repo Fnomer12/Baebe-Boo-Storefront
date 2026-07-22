@@ -6,7 +6,8 @@ import {
   resolveCheckoutBasket,
 } from "@/lib/checkout/resolve-basket";
 import { rateLimit } from "@/lib/rate-limit";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { tryCreateServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseAdminConfigured } from "@/lib/supabase-admin";
 
 function fail(message: string, status = 400) {
   return NextResponse.json({ status: false, message }, { status });
@@ -27,6 +28,9 @@ export async function POST(request: Request) {
     if (fulfilmentType === "pickup" && typeof body.shopId !== "string") {
       return fail("Choose a collection branch.");
     }
+    if (!isSupabaseAdminConfigured) {
+      return fail("Checkout pricing is temporarily unavailable.", 503);
+    }
     const basket = await resolveCheckoutBasket({
       items: parseCheckoutItems(body.items),
       fulfilmentType,
@@ -35,8 +39,8 @@ export async function POST(request: Request) {
       deliveryZoneId: typeof body.deliveryZoneId === "string" ? body.deliveryZoneId : undefined,
     });
 
-    const authClient = await createServerSupabaseClient();
-    const { data: authData } = await authClient.auth.getUser();
+    const authClient = await tryCreateServerSupabaseClient();
+    const authData = authClient ? (await authClient.auth.getUser()).data : null;
     const quote = await quoteCheckoutPromotions({
       lines: basket.variants.map((variant) => ({
         variantId: variant.id,
@@ -46,7 +50,7 @@ export async function POST(request: Request) {
       productIds: [...new Set(basket.variants.map((variant) => variant.productId))],
       deliveryFee: basket.deliveryFee,
       promotionCode: typeof body.promotionCode === "string" ? body.promotionCode : null,
-      customerUserId: authData.user?.id || null,
+      customerUserId: authData?.user?.id || null,
     });
 
     return NextResponse.json({

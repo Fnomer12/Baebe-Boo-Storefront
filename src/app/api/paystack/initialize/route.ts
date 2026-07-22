@@ -7,8 +7,8 @@ import {
 } from "@/lib/checkout/resolve-basket";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireServerEnv } from "@/lib/server-env";
-import { supabaseAdmin } from "@/lib/supabase-admin";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
+import { tryCreateServerSupabaseClient } from "@/lib/supabase/server";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -62,6 +62,10 @@ export async function POST(req: Request) {
       return errorResponse("Invalid checkout details.");
     }
 
+    if (!isSupabaseAdminConfigured) {
+      return errorResponse("Checkout is temporarily unavailable.", 503);
+    }
+
     const basket = await resolveCheckoutBasket({
       items: parseCheckoutItems(items),
       fulfilmentType: chosenFulfilment,
@@ -71,8 +75,8 @@ export async function POST(req: Request) {
     });
     const { products, variants: selectedVariants, inventory, allocation, merchandiseTotal, deliveryFee } = basket;
     const productIds = [...new Set(selectedVariants.map((variant) => variant.productId))];
-    const authClient = await createServerSupabaseClient();
-    const { data: authData } = await authClient.auth.getUser();
+    const authClient = await tryCreateServerSupabaseClient();
+    const authData = authClient ? (await authClient.auth.getUser()).data : null;
     const promotionQuote = await quoteCheckoutPromotions({
       lines: selectedVariants.map((variant) => ({
         variantId: variant.id,
@@ -82,7 +86,7 @@ export async function POST(req: Request) {
       productIds,
       deliveryFee,
       promotionCode: typeof promotionCode === "string" ? promotionCode : null,
-      customerUserId: authData.user?.id || null,
+      customerUserId: authData?.user?.id || null,
     });
     if (typeof promotionCode === "string" && promotionCode.trim() && !promotionQuote.promotionCodeValid) {
       return errorResponse(promotionQuote.promotionMessage || "That promotion code is not valid.");
@@ -100,7 +104,7 @@ export async function POST(req: Request) {
         customer_name: name.trim(),
         customer_email: email.trim().toLowerCase(),
         customer_phone: phone.trim(),
-        customer_user_id: authData.user?.id || null,
+        customer_user_id: authData?.user?.id || null,
         delivery_address: chosenFulfilment === "delivery" ? deliveryAddress.trim() : "Click-and-collect",
         shop_id: primaryShopId,
         total_amount: total,
@@ -174,7 +178,7 @@ export async function POST(req: Request) {
     const { data: reservation, error: reservationError } = await supabaseAdmin.rpc("reserve_checkout", {
       p_items: reservationItems,
       p_order_id: order.id,
-      p_user_id: authData.user?.id || null,
+      p_user_id: authData?.user?.id || null,
       p_guest_token_hash: null,
     });
     if (reservationError || !reservation) throw new Error("Could not reserve inventory.");

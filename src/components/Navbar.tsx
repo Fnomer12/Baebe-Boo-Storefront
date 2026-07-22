@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Cormorant_Garamond } from "next/font/google";
+import { whatsappUrl } from "@/lib/public-contact";
 import {
   Menu,
   SlidersHorizontal,
@@ -28,11 +28,6 @@ import {
   Truck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
 
 const genders = [
   { name: "All", icon: ToyBrick },
@@ -83,7 +78,6 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
   const [liveCartCount, setLiveCartCount] = useState(cartCount);
   const [cartMessage, setCartMessage] = useState("");
 
-  const [flipped, setFlipped] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -142,14 +136,6 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setFlipped((prev) => !prev);
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     const handleScroll = () => {
       setMinimized(window.scrollY > 40);
     };
@@ -159,6 +145,18 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen && !filtersOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setFiltersOpen(false);
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [filtersOpen, menuOpen]);
 
   const applyFilters = () => {
     onFilterChange?.({
@@ -188,7 +186,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
     <>
       <header className="fixed left-0 top-0 z-50 w-full px-2 pt-2 sm:px-3 sm:pt-3 md:px-4 md:pt-4">
         <div
-          className={`mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/50 bg-white/50 shadow-lg shadow-black/5 backdrop-blur-2xl transition-all duration-500 ${
+          className={`mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/70 bg-white/90 shadow-lg shadow-black/5 transition-all duration-500 ${
             minimized
               ? "h-14 px-2 sm:px-3 md:h-16 md:px-4"
               : "h-16 px-2 sm:h-[72px] sm:px-3 md:h-24 md:px-5"
@@ -211,7 +209,6 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                 fill
                 sizes="(min-width: 768px) 64px, 48px"
                 className="object-cover"
-                priority
               />
             </div>
 
@@ -223,13 +220,11 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
               }`}
             >
               <div
-                className={`relative h-full w-full transition-transform duration-1000 [transform-style:preserve-3d] ${
-                  flipped ? "[transform:rotateX(-180deg)]" : ""
-                }`}
+                className="relative h-full w-full [transform-style:preserve-3d]"
               >
                 <div className="absolute inset-0 flex items-center overflow-hidden [backface-visibility:hidden]">
                   <span
-                    className={`${cormorant.className} truncate whitespace-nowrap font-semibold tracking-tight text-black transition-all duration-500 ${
+                    className={`truncate whitespace-nowrap [font-family:Georgia,serif] font-semibold tracking-tight text-black transition-all duration-500 ${
                       minimized
                         ? "text-[1.45rem] sm:text-3xl md:text-4xl"
                         : "text-[1.7rem] sm:text-4xl md:text-5xl"
@@ -241,7 +236,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
                 <div className="absolute inset-0 flex items-center overflow-hidden [transform:rotateX(180deg)] [backface-visibility:hidden]">
                   <span
-                    className={`${cormorant.className} truncate whitespace-nowrap font-semibold tracking-tight text-black transition-all duration-500 ${
+                    className={`truncate whitespace-nowrap [font-family:Georgia,serif] font-semibold tracking-tight text-black transition-all duration-500 ${
                       minimized
                         ? "text-[1.45rem] sm:text-3xl md:text-4xl"
                         : "text-[1.7rem] sm:text-4xl md:text-5xl"
@@ -257,6 +252,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-3">
             <Link
               href="/store"
+              prefetch={false}
               className={`hidden items-center rounded-full bg-white/80 px-4 text-xs font-semibold text-black shadow-sm backdrop-blur-xl transition hover:scale-105 hover:bg-white sm:flex md:px-5 md:text-sm ${
                 minimized ? "h-9 md:h-10" : "h-10 md:h-12"
               }`}
@@ -267,6 +263,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
             {showFilters && (
               <button
                 onClick={() => setFiltersOpen(true)}
+                aria-label="Open product filters"
                 className={`flex items-center justify-center gap-2 rounded-full bg-[#DDF2FF]/95 px-3 text-black shadow-sm backdrop-blur-xl transition hover:scale-105 md:px-4 ${
                   minimized ? "h-9" : "h-10 md:h-12"
                 }`}
@@ -280,7 +277,8 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
             <Link
               href="/cart"
-              aria-label="Cart"
+              prefetch={false}
+              aria-label={`Cart, ${liveCartCount} items`}
               className={`relative flex shrink-0 items-center justify-center overflow-visible rounded-full bg-black text-white shadow-sm transition-all duration-300 hover:scale-105 hover:bg-neutral-900 ${
                 minimized
                   ? "h-10 w-12 md:h-11 md:w-14"
@@ -325,6 +323,8 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
       )}
 
       <aside
+        aria-hidden={!menuOpen}
+        inert={!menuOpen ? true : undefined}
         className={`fixed right-0 top-0 z-[80] h-dvh w-full max-w-[390px] overflow-y-auto bg-[#FDFBF8] shadow-2xl transition-transform duration-500 sm:w-[90%] ${
           menuOpen ? "translate-x-0" : "translate-x-full"
         }`}
@@ -337,6 +337,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
           <button
             onClick={() => setMenuOpen(false)}
+            aria-label="Close menu"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white"
           >
             <X size={20} />
@@ -373,7 +374,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
           />
 
           <a
-            href="https://wa.me/233XXXXXXXXX"
+            href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-3 rounded-2xl bg-[#25D366] px-5 py-4 font-semibold text-white"
@@ -393,6 +394,8 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
       {showFilters && (
         <aside
+          aria-hidden={!filtersOpen}
+          inert={!filtersOpen ? true : undefined}
           className={`fixed right-0 top-0 z-[70] h-dvh w-full max-w-[430px] overflow-y-auto bg-[#FDFBF8] shadow-2xl transition-transform duration-500 sm:w-[90%] ${
             filtersOpen ? "translate-x-0" : "translate-x-full"
           }`}
@@ -407,6 +410,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
             <button
               onClick={() => setFiltersOpen(false)}
+              aria-label="Close product filters"
               className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white"
             >
               <X size={20} />
@@ -540,6 +544,7 @@ function MenuLink({
   return (
     <Link
       href={href}
+      prefetch={false}
       onClick={close}
       className="flex items-center gap-3 rounded-2xl bg-white px-5 py-4 font-semibold text-black shadow-sm transition hover:bg-[#F8F5F0]"
     >

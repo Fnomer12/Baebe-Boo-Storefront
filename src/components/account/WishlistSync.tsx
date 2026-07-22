@@ -2,11 +2,13 @@
 
 import { useEffect } from "react";
 import { storefrontKeys } from "@/lib/storefront-state";
+import { isSupabaseConfigured } from "@/lib/supabase-config";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export default function WishlistSync() {
   useEffect(() => {
+    if (!isSupabaseConfigured) return;
     let ids: unknown = [];
     try { ids = JSON.parse(localStorage.getItem(storefrontKeys.wishlist) || "[]"); } catch { ids = []; }
     const productIds = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string" && uuid.test(id)) : [];

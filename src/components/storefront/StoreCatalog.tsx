@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, Search, SlidersHorizontal, Store } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import ProductCard from "./ProductCard";
 import { PageIntro, StorefrontPage } from "./StorefrontChrome";
 import { ageRanges, catalogProductFromRow, categories, demoCatalogEnabled, fallbackProducts, fallbackShops, type PublicCatalogRow, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
@@ -31,10 +31,13 @@ export default function StoreCatalog({ initialQuery, initialSort }: { initialQue
   const [age, setAge] = useState("all");
   const [sort, setSort] = useState(initialSort);
   const [shopId, setShopId] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
     let active = true;
     async function load() {
       const [productResult, shopResult] = await Promise.all([

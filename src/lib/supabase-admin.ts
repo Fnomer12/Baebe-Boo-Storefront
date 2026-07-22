@@ -1,15 +1,21 @@
+import "server-only";
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
-if (!supabaseUrl || !supabaseSecretKey) {
-  throw new Error("Supabase server credentials are not configured.");
-}
+export const isSupabaseAdminConfigured = Boolean(supabaseUrl && supabaseSecretKey);
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
+// Keep module evaluation safe so routes can return a controlled 503 when a
+// deployment is not configured yet. Callers must check the flag before use.
+export const supabaseAdmin = createClient(
+  supabaseUrl || "https://example.supabase.co",
+  supabaseSecretKey || "supabase-not-configured",
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
   },
-});
+);

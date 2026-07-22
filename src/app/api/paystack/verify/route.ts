@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireServerEnv } from "@/lib/server-env";
 import { finalizeVerifiedOrder } from "@/lib/orders/finalize-paid-order";
@@ -25,6 +25,13 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { status: false, message: "Invalid payment verification request." },
         { status: 400 }
+      );
+    }
+
+    if (!isSupabaseAdminConfigured) {
+      return NextResponse.json(
+        { status: false, message: "Payment verification is temporarily unavailable." },
+        { status: 503 },
       );
     }
 

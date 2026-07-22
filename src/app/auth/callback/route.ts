@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { tryCreateServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -8,11 +8,13 @@ export async function GET(request: Request) {
   const next = requestedNext?.startsWith("/") ? requestedNext : "/account";
 
   if (code) {
-    const supabase = await createServerSupabaseClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      await supabase.rpc("claim_my_guest_orders");
-      return NextResponse.redirect(new URL(next, requestUrl.origin));
+    const supabase = await tryCreateServerSupabaseClient();
+    if (supabase) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (!error) {
+        await supabase.rpc("claim_my_guest_orders");
+        return NextResponse.redirect(new URL(next, requestUrl.origin));
+      }
     }
   }
 

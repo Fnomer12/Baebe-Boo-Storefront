@@ -12,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import AccountSignOut from "@/components/account/AccountSignOut";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { tryCreateServerSupabaseClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "My account | Baebe Boo",
@@ -20,7 +20,8 @@ export const metadata: Metadata = {
 };
 
 export default async function AccountPage() {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await tryCreateServerSupabaseClient();
+  if (!supabase) redirect("/account/login");
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) redirect("/account/login");
 

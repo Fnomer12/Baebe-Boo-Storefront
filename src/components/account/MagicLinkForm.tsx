@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { Mail, ShieldCheck } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export default function MagicLinkForm() {
   const [email, setEmail] = useState("");
@@ -13,6 +13,12 @@ export default function MagicLinkForm() {
     event.preventDefault();
     setPending(true);
     setMessage("");
+
+    if (!isSupabaseConfigured) {
+      setPending(false);
+      setMessage("Account sign-in is unavailable until Supabase is configured.");
+      return;
+    }
 
     const redirectTo = `${window.location.origin}/auth/callback?next=/account`;
     const { error } = await supabase.auth.signInWithOtp({

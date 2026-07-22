@@ -2,7 +2,10 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  tryCreateServerSupabaseClient,
+} from "@/lib/supabase/server";
 
 type AuthorizedCustomerMutation =
   | {
@@ -43,7 +46,16 @@ export async function authorizeCustomerMutation(
     };
   }
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = await tryCreateServerSupabaseClient();
+  if (!supabase) {
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        { message: "Account services are temporarily unavailable." },
+        { status: 503 },
+      ),
+    };
+  }
   const {
     data: { user },
     error,

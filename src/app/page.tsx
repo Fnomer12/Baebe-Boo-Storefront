@@ -7,6 +7,8 @@ export const metadata: Metadata = {
     "Shop thoughtfully chosen baby clothing, shoes, feeding, nursery, toys and gifts with nationwide delivery across Ghana.",
 };
 
+export const revalidate = 300;
+
 export default function Home() {
   return <StorefrontHome />;
 }

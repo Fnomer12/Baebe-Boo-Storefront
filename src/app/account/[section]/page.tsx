@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import AddressManager, { type SavedAddress } from "@/components/account/AddressManager";
 import ReturnRequestForm, { type ReturnEligibleOrder } from "@/components/account/ReturnRequestForm";
 import VerifiedReviewForm, { type ReviewablePurchase } from "@/components/account/VerifiedReviewForm";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { tryCreateServerSupabaseClient } from "@/lib/supabase/server";
 
 const sections = {
   orders: { title: "Order history", description: "Track deliveries, collections and past purchases." },
@@ -31,7 +31,8 @@ export default async function AccountSectionPage({ params }: { params: Promise<{
   const content = sections[section as SectionKey];
   if (!content) notFound();
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = await tryCreateServerSupabaseClient();
+  if (!supabase) redirect("/account/login");
   const { data } = await supabase.auth.getUser();
   if (!data.user) redirect("/account/login");
 

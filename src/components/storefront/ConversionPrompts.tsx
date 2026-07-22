@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Clock3, X } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type PromotionRow = {
   id: string;
@@ -32,6 +32,7 @@ export default function ConversionPrompts() {
   useEffect(() => {
     let active = true;
     async function loadPromotion() {
+      if (!isSupabaseConfigured) return;
       const result = await supabase.from("promotions").select("id,name,description,promotion_type,value,starts_at,ends_at").eq("status", "active").order("ends_at", { ascending: true, nullsFirst: false }).limit(10);
       if (!active || result.error) return;
       const current = Date.now();

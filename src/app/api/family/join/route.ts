@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
 
 const joinSchema = z.object({
   parentName: z.string().trim().min(2).max(120),
@@ -24,6 +24,13 @@ export async function POST(request: Request) {
   const input = joinSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) {
     return NextResponse.json({ message: "Check your family details and consent." }, { status: 400 });
+  }
+
+  if (!isSupabaseAdminConfigured) {
+    return NextResponse.json(
+      { message: "Family signup is temporarily unavailable." },
+      { status: 503 },
+    );
   }
 
   const childNames = input.data.childName.split(/\s+/);

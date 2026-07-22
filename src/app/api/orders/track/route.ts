@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
 import { rateLimit } from "@/lib/rate-limit";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -19,6 +19,13 @@ export async function POST(request: Request) {
 
   if (!orderNumber || !emailPattern.test(email)) {
     return NextResponse.json({ message: "Enter a valid order number and email." }, { status: 400 });
+  }
+
+  if (!isSupabaseAdminConfigured) {
+    return NextResponse.json(
+      { message: "Order tracking is temporarily unavailable." },
+      { status: 503 },
+    );
   }
 
   const { data: order, error } = await supabaseAdmin

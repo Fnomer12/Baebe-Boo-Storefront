@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { rankRecommendations } from "@/domain/recommendations/rank";
 import { recentlyViewedProductIds } from "@/lib/storefront-state";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import ProductCard from "./ProductCard";
 import { catalogProductFromRow, demoCatalogEnabled, fallbackProducts, type PublicCatalogRow, type StorefrontProduct } from "./catalog-data";
 
@@ -28,6 +28,7 @@ export default function ProductRecommendations({ current }: { current: Storefron
     const frame = window.requestAnimationFrame(() => setRecentIds(recentlyViewedProductIds().filter((id) => id !== current.id)));
     let active = true;
     async function load() {
+      if (!isSupabaseConfigured) return;
       const productsRequest = supabase.from("products").select("id,name,category,age_range,gender,price,image_url").eq("is_active", true).limit(48);
       const pairingRequest = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(current.id)
         ? supabase.rpc("get_frequently_bought_together", { p_product_id: current.id, p_limit: 4 })

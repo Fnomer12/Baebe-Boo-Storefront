@@ -152,6 +152,7 @@ export default function TrackRecordsPage() {
 
             <div className="flex items-center gap-3">
               <button
+                aria-label="Previous order"
                 disabled={page === 1}
                 onClick={() => setPage((prev) => prev - 1)}
                 className="flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white disabled:opacity-40"
@@ -164,6 +165,7 @@ export default function TrackRecordsPage() {
               </span>
 
               <button
+                aria-label="Next order"
                 disabled={page === totalPages}
                 onClick={() => setPage((prev) => prev + 1)}
                 className="flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white disabled:opacity-40"

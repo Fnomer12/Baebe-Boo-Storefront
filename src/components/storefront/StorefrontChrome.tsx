@@ -2,11 +2,9 @@ import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { whatsappUrl } from "@/lib/public-contact";
 
-const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER?.replace(/\D/g, "");
-export const whatsappUrl = whatsappNumber
-  ? `https://wa.me/${whatsappNumber}?text=Hello%20Baebe%20Boo%2C%20I%20would%20like%20some%20help.`
-  : "/stores";
+export { whatsappUrl } from "@/lib/public-contact";
 
 export function StorefrontPage({ children, cartCount = 0 }: { children: React.ReactNode; cartCount?: number }) {
   return (

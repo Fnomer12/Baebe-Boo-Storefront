@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request: Request) {
   const authorization = request.headers.get("authorization");
@@ -7,6 +7,10 @@ export async function POST(request: Request) {
 
   if (!accessToken) {
     return NextResponse.json({ authorized: false }, { status: 401 });
+  }
+
+  if (!isSupabaseAdminConfigured) {
+    return NextResponse.json({ authorized: false }, { status: 503 });
   }
 
   const {

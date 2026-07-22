@@ -9,7 +9,7 @@ export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) return NextResponse.json({ productIds: [] }, { status: 401 });
+    if (!authData.user) return NextResponse.json({ productIds: [] });
     const { data, error } = await supabase
       .from("wishlists")
       .select("wishlist_items(product_id)")
@@ -20,7 +20,7 @@ export async function GET() {
     );
     return NextResponse.json({ productIds: [...new Set(productIds)] });
   } catch {
-    return NextResponse.json({ productIds: [] }, { status: 503 });
+    return NextResponse.json({ productIds: [] });
   }
 }
 

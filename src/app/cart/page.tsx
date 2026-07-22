@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import {
   Minus,
   Plus,
@@ -94,14 +94,16 @@ export default function CartPage() {
   const [quoteRevision, setQuoteRevision] = useState(0);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  const checkoutDialogRef = useRef<HTMLDivElement>(null);
+  const checkoutTriggerRef = useRef<HTMLButtonElement>(null);
+  const placingOrderRef = useRef(placingOrder);
+
+  useEffect(() => {
+    placingOrderRef.current = placingOrder;
+  }, [placingOrder]);
 
   const showMessage = useCallback((text: string) => {
     setMessage(text);
-    window.dispatchEvent(
-      new CustomEvent("baebe_cart_message", {
-        detail: text,
-      }),
-    );
     setTimeout(() => setMessage(""), 3000);
   }, []);
 
@@ -120,6 +122,7 @@ export default function CartPage() {
 
   useEffect(() => {
     if (!checkoutOpen) return;
+    if (!isSupabaseConfigured) return;
     const controller = new AbortController();
     const loadOptions = async () => {
       setCheckoutOptionsLoading(true);
@@ -144,6 +147,44 @@ export default function CartPage() {
     void loadOptions();
     return () => controller.abort();
   }, [checkoutOpen, selectedShop?.id, showMessage]);
+
+  useEffect(() => {
+    if (!checkoutOpen) return;
+    const checkoutTrigger = checkoutTriggerRef.current;
+    const focusFrame = window.requestAnimationFrame(() => {
+      checkoutDialogRef.current
+        ?.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled])")
+        ?.focus();
+    });
+    const handleDialogKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !placingOrderRef.current) {
+        setCheckoutOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        checkoutDialogRef.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]",
+        ) ?? [],
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleDialogKeys);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", handleDialogKeys);
+      checkoutTrigger?.focus();
+    };
+  }, [checkoutOpen]);
 
   useEffect(() => {
     if (
@@ -256,6 +297,17 @@ export default function CartPage() {
           cartItemKey(cartItem) === lineKey ? { ...cartItem, quantity: currentQuantity + 1 } : cartItem,
         ),
       );
+      return;
+    }
+
+    if (!isSupabaseConfigured) {
+      const currentQuantity = Number(item.quantity || 1);
+      const limit = item.stockAvailable || 100;
+      if (currentQuantity >= limit) {
+        showMessage(`Only ${limit} available for this demo branch.`);
+        return;
+      }
+      updateCart(cartItems.map((cartItem) => cartItemKey(cartItem) === lineKey ? { ...cartItem, quantity: currentQuantity + 1 } : cartItem));
       return;
     }
 
@@ -468,7 +520,8 @@ export default function CartPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F5F0] text-black">
-      <Navbar cartCount={cartCount} />
+      <div aria-hidden={checkoutOpen} inert={checkoutOpen ? true : undefined}>
+        <Navbar cartCount={cartCount} />
 
       {message && (
         <div className="fixed left-1/2 top-20 z-[90] w-[92%] max-w-md -translate-x-1/2 rounded-3xl bg-black px-5 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-24 sm:rounded-full">
@@ -597,6 +650,7 @@ export default function CartPage() {
     <div className="flex items-center gap-4 rounded-full bg-[#F8F5F0] p-1.5">
       <button
         onClick={() => decreaseQuantity(cartItemKey(item))}
+        aria-label={`Decrease quantity of ${item.name}`}
         className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shadow-sm"
       >
         <Minus size={17} />
@@ -608,6 +662,7 @@ export default function CartPage() {
 
       <button
         onClick={() => increaseQuantity(cartItemKey(item))}
+        aria-label={`Increase quantity of ${item.name}`}
         className="flex h-11 w-11 items-center justify-center rounded-full bg-black text-white shadow-sm"
       >
         <Plus size={18} />
@@ -661,7 +716,13 @@ export default function CartPage() {
                 </div>
 
                <button
-  onClick={() => setCheckoutOpen(true)}
+  ref={checkoutTriggerRef}
+  onClick={() => {
+    setCheckoutOpen(true);
+    if (!isSupabaseConfigured) {
+      showMessage("Checkout options are temporarily unavailable.");
+    }
+  }}
   disabled={placingOrder}
   className="shimmer-btn mt-6 h-14 w-full rounded-full bg-black text-sm font-semibold text-white shadow-lg transition hover:scale-[1.02] hover:bg-neutral-900 disabled:opacity-50"
 >
@@ -674,16 +735,17 @@ export default function CartPage() {
           )}
         </div>
       </section>
+      </div>
 
       {checkoutOpen && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/35 px-3 py-3 backdrop-blur-md sm:items-center sm:px-4">
-          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[1.75rem] border border-white/40 bg-white/90 p-4 shadow-2xl backdrop-blur-xl sm:rounded-[2rem] sm:p-6">
+          <div ref={checkoutDialogRef} role="dialog" aria-modal="true" aria-labelledby="checkout-title" className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[1.75rem] border border-white/40 bg-white/90 p-4 shadow-2xl backdrop-blur-xl sm:rounded-[2rem] sm:p-6">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/40 sm:tracking-[0.2em]">
                   Online Checkout
                 </p>
-                <h2 className="mt-1 text-2xl font-semibold">
+                <h2 id="checkout-title" className="mt-1 text-2xl font-semibold">
                   Delivery Details
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-black/50">
@@ -692,6 +754,7 @@ export default function CartPage() {
               </div>
 
               <button
+                aria-label="Close checkout"
                 onClick={() => {
                   if (!placingOrder) setCheckoutOpen(false);
                 }}

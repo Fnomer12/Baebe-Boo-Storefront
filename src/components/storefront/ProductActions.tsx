@@ -6,7 +6,7 @@ import { Check, GitCompareArrows, Heart, MessageCircle, ShoppingBag, Zap } from 
 import type { StorefrontProduct } from "./catalog-data";
 import { whatsappUrl } from "./StorefrontChrome";
 import { addProductToCart, productListContains, recordRecentlyViewed, selectedStore, storefrontKeys, toggleProductList } from "@/lib/storefront-state";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type Availability = "loading" | "in_stock" | "low_stock" | "out_of_stock" | "unknown";
 
@@ -34,7 +34,7 @@ export default function ProductActions({ product }: { product: StorefrontProduct
   }, [product.id]);
 
   useEffect(() => {
-    if (!hasLiveProductId) return;
+    if (!hasLiveProductId || !isSupabaseConfigured) return;
     let active = true;
     void supabase.rpc("get_product_availability", { p_product_ids: [product.id] }).then(({ data, error }) => {
       if (!active) return;

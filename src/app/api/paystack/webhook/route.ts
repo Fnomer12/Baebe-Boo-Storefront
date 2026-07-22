@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
 import { requireServerEnv } from "@/lib/server-env";
 import { finalizeVerifiedOrder } from "@/lib/orders/finalize-paid-order";
 
@@ -30,6 +30,10 @@ export async function POST(request: Request) {
 
   if (!validSignature) {
     return NextResponse.json({ received: false }, { status: 401 });
+  }
+
+  if (!isSupabaseAdminConfigured) {
+    return NextResponse.json({ received: false }, { status: 503 });
   }
 
   try {

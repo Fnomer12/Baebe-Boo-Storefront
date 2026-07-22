@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Image from "next/image";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { ShieldCheck } from "lucide-react";
 
 export default function CounterLoginPage() {
@@ -14,6 +14,11 @@ export default function CounterLoginPage() {
   const login = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+
+    if (!isSupabaseConfigured) {
+      setError("Counter sign-in is unavailable until Supabase is configured.");
+      return;
+    }
 
     const cleanCode = staffCode.trim().toUpperCase();
     if (!cleanCode) {

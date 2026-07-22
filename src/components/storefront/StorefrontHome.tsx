@@ -1,53 +1,41 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Check, Gift, HeartHandshake, MapPin, Search, ShieldCheck, Sparkles, Star, Truck } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import MemberForm from "./MemberForm";
+import LazyMemberForm from "./LazyMemberForm";
 import ProductCard from "./ProductCard";
 import { StorefrontPage, whatsappUrl } from "./StorefrontChrome";
 import { ageRanges, catalogProductFromRow, categories, demoCatalogEnabled, fallbackProducts, fallbackShops, parentingArticles, type PublicCatalogRow, type StorefrontProduct, type StorefrontShop } from "./catalog-data";
+import { loadStorefrontHomeData } from "@/lib/storefront-home";
 
 type ShopRow = { id: string; name: string | null; location: string | null };
 
-export default function StorefrontHome() {
-  const [bestSellers, setBestSellers] = useState(demoCatalogEnabled ? fallbackProducts.slice(0, 4) : []);
-  const [newArrivals, setNewArrivals] = useState(demoCatalogEnabled ? fallbackProducts.slice(4, 8) : []);
-  const [shops, setShops] = useState<StorefrontShop[]>(demoCatalogEnabled ? fallbackShops : []);
-
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      const [productResult, shopResult, bestSellerResult] = await Promise.all([
-        supabase.from("products").select("id,name,category,age_range,gender,price,image_url").eq("is_active", true).order("created_at", { ascending: false }).limit(100),
-        supabase.from("shops").select("id,name,location").eq("is_active", true).order("created_at", { ascending: true }),
-        supabase.rpc("get_best_selling_products", { p_limit: 4 }),
-      ]);
-      if (!active) return;
-      if (!productResult.error && productResult.data?.length) {
-        const mapped = (productResult.data as PublicCatalogRow[]).map(catalogProductFromRow).filter((product): product is StorefrontProduct => Boolean(product));
-        setNewArrivals(mapped.slice(0, 4));
-        if (!bestSellerResult.error && bestSellerResult.data?.length) {
-          const rankedIds = (bestSellerResult.data as Array<{ product_id: string }>).map((entry) => entry.product_id);
-          const byId = new Map(mapped.map((product) => [product.id, product]));
-          const missingIds = rankedIds.filter((id) => !byId.has(id));
-          if (missingIds.length) {
-            const missingResult = await supabase.from("products").select("id,name,category,age_range,gender,price,image_url").in("id", missingIds).eq("is_active", true);
-            if (!missingResult.error) {
-              for (const product of (missingResult.data as PublicCatalogRow[]).map(catalogProductFromRow).filter((item): item is StorefrontProduct => Boolean(item))) byId.set(product.id, product);
-            }
-          }
-          if (active) setBestSellers(rankedIds.map((id) => byId.get(id)).filter((product): product is StorefrontProduct => Boolean(product)));
-        } else if (!demoCatalogEnabled) {
-          setBestSellers([]);
-        }
-      }
-      if (!shopResult.error && shopResult.data?.length) setShops((shopResult.data as ShopRow[]).map((shop) => ({ id: shop.id, name: shop.name || "Baebe Boo", location: shop.location || "Ghana", hours: "Confirm hours with the store", phone: "" })));
-    }
-    void load();
-    return () => { active = false; };
-  }, []);
+export default async function StorefrontHome() {
+  const result = (await loadStorefrontHomeData()) as {
+    products: PublicCatalogRow[];
+    shops: ShopRow[];
+    bestSellerIds: string[];
+  };
+  const mapped = result.products
+    .map(catalogProductFromRow)
+    .filter((product): product is StorefrontProduct => Boolean(product));
+  const byId = new Map(mapped.map((product) => [product.id, product]));
+  const newArrivals = mapped.length
+    ? mapped.slice(0, 4)
+    : demoCatalogEnabled
+      ? fallbackProducts.slice(4, 8)
+      : [];
+  const ranked = result.bestSellerIds
+    .map((id) => byId.get(id))
+    .filter((product): product is StorefrontProduct => Boolean(product));
+  const bestSellers = ranked.length
+    ? ranked
+    : demoCatalogEnabled
+      ? fallbackProducts.slice(0, 4)
+      : [];
+  const shops: StorefrontShop[] = result.shops.length
+    ? result.shops.map((shop) => ({ id: shop.id, name: shop.name || "Baebe Boo", location: shop.location || "Ghana", hours: "Confirm hours with the store", phone: "" }))
+    : demoCatalogEnabled
+      ? fallbackShops
+      : [];
 
   return (
     <StorefrontPage>
@@ -58,7 +46,7 @@ export default function StorefrontHome() {
             <h1>Everything Your Little One Needs,<br /><em>All In One Trusted Place.</em></h1>
             <p className="storefront-lead">Clothing, Shoes, Toys, Feeding Essentials, Nursery Items and Gifts Carefully Selected for Babies and Children.</p>
             <div className="flex flex-col gap-3 pt-3 sm:flex-row">
-              <Link href="/store" className="storefront-primary-button">Shop now <ArrowRight size={18} /></Link>
+              <Link href="/store" prefetch={false} className="storefront-primary-button">Shop now <ArrowRight size={18} /></Link>
               <Link href="/stores" className="storefront-secondary-button">Visit our store <MapPin size={16} /></Link>
               <Link href={whatsappUrl} target="_blank" className="storefront-text-button">Chat on WhatsApp</Link>
             </div>
@@ -89,7 +77,7 @@ export default function StorefrontHome() {
 
         <section>
           <SectionHeading eyebrow="Loved right now" title="Family favourites" href="/store?sort=featured" />
-          {bestSellers.length ? <div className="storefront-product-grid">{bestSellers.map((product) => <ProductCard key={product.id} product={product} />)}</div> : <p className="text-sm text-black/50">Customer favourites will appear after verified purchases.</p>}
+          {bestSellers.length ? <div className="storefront-product-grid">{bestSellers.map((product) => <ProductCard key={product.id} product={product} />)}</div> : <p className="text-sm text-black/70">Customer favourites will appear after verified purchases.</p>}
         </section>
 
         <section className="storefront-story-banner">
@@ -99,11 +87,11 @@ export default function StorefrontHome() {
 
         <section>
           <SectionHeading eyebrow="Just arrived" title="Fresh little finds" href="/store?sort=newest" />
-          {newArrivals.length ? <div className="storefront-product-grid">{newArrivals.map((product) => <ProductCard key={product.id} product={product} />)}</div> : <p className="text-sm text-black/50">New verified products are being prepared.</p>}
+          {newArrivals.length ? <div className="storefront-product-grid">{newArrivals.map((product) => <ProductCard key={product.id} product={product} />)}</div> : <p className="text-sm text-black/70">New verified products are being prepared.</p>}
         </section>
 
         <section className="storefront-reviews">
-          <div><p className="storefront-eyebrow">Family notes</p><h2>Loved by Ghanaian families</h2><div className="flex gap-1 text-[#cc9153]">{[1,2,3,4,5].map((star) => <Star key={star} size={18} fill="currentColor" />)}</div><p className="text-sm text-black/50">Genuine customer stories will appear here after review verification.</p></div>
+          <div><p className="storefront-eyebrow">Family notes</p><h2>Loved by Ghanaian families</h2><div className="flex gap-1 text-[#cc9153]">{[1,2,3,4,5].map((star) => <Star key={star} size={18} fill="currentColor" />)}</div><p className="text-sm text-black/70">Genuine customer stories will appear here after review verification.</p></div>
           <div className="storefront-review-placeholder"><Check size={25} /><strong>Verified reviews only</strong><p>We never invent customer voices. This space is ready for approved reviews from real Baebe Boo purchases.</p></div>
         </section>
 
@@ -122,7 +110,7 @@ export default function StorefrontHome() {
 
         <section id="family-signup" className="storefront-family-signup scroll-mt-28">
           <div><p className="storefront-eyebrow">The Baebe Boo family</p><h2>Small surprises for your biggest moments.</h2><p>Join for age-relevant ideas, birthday treats, member-first finds and a little more joy in your inbox.</p><ul><li><Check size={16} /> Thoughtful, age-relevant tips</li><li><Check size={16} /> Birthday surprises</li><li><Check size={16} /> Early access to special collections</li></ul></div>
-          <MemberForm />
+          <LazyMemberForm />
         </section>
       </div>
     </StorefrontPage>

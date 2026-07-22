@@ -35,3 +35,11 @@ export async function createServerSupabaseClient() {
     },
   });
 }
+
+export async function tryCreateServerSupabaseClient() {
+  try {
+    return await createServerSupabaseClient();
+  } catch {
+    return null;
+  }
+}

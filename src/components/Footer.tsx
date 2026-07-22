@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Baby, Camera, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import { whatsappUrl } from "@/lib/public-contact";
 
 const groups = [
   {
@@ -32,8 +33,6 @@ const groups = [
 ] as const;
 
 export default function Footer() {
-  const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "233000000000";
-
   return (
     <footer className="mt-auto bg-[#07141c] px-4 py-12 text-white sm:px-6 sm:py-16">
       <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.4fr_2fr]">
@@ -47,7 +46,7 @@ export default function Footer() {
             thoughtful guidance and nationwide care from Ghana.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <a href={`https://wa.me/${whatsappNumber}`} className="inline-flex items-center gap-2 rounded-full bg-[#25d366] px-4 py-2.5 text-sm font-semibold text-black"><MessageCircle size={17} /> WhatsApp</a>
+            <a href={whatsappUrl} className="inline-flex items-center gap-2 rounded-full bg-[#25d366] px-4 py-2.5 text-sm font-semibold !text-[#07141c]"><MessageCircle size={17} /> WhatsApp</a>
             <a href="mailto:hello@baebe-boo.com" className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-sm font-semibold"><Mail size={17} /> Email</a>
           </div>
         </div>
@@ -62,7 +61,7 @@ export default function Footer() {
           ))}
         </div>
       </div>
-      <div className="mx-auto mt-12 flex max-w-7xl flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6 text-xs text-white/40">
+      <div className="mx-auto mt-12 flex max-w-7xl flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6 text-xs text-white/60">
         <p>© {new Date().getFullYear()} Baebe Boo, Brightseed Group.</p>
         <div className="flex flex-wrap gap-4">
           <span className="inline-flex items-center gap-1.5"><MapPin size={14} /> Ghana</span>

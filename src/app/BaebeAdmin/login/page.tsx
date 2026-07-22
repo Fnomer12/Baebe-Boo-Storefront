@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -15,6 +15,10 @@ export default function AdminLoginPage() {
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+    if (!isSupabaseConfigured) {
+      setError("Admin sign-in is unavailable until Supabase is configured.");
+      return;
+    }
     setLoading(true);
 
     const cleanUsername = username.trim().toLowerCase();

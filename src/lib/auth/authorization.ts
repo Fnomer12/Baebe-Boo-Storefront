@@ -2,7 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { tryCreateServerSupabaseClient } from "@/lib/supabase/server";
 
 export type AdminAuthorization = {
   userId: string;
@@ -54,7 +54,8 @@ type CounterStaffRow = {
  */
 export const getAdminAuthorization = cache(
   async (): Promise<AdminAuthorization | null> => {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await tryCreateServerSupabaseClient();
+    if (!supabase) return null;
     const {
       data: { user },
       error: userError,
@@ -92,7 +93,8 @@ export const getAdminAuthorization = cache(
  */
 export const getCounterAuthorization = cache(
   async (): Promise<CounterAuthorization | null> => {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await tryCreateServerSupabaseClient();
+    if (!supabase) return null;
     const {
       data: { user },
       error: userError,

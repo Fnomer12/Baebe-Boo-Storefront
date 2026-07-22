@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET() {
+  if (!isSupabaseAdminConfigured) {
+    return NextResponse.json(
+      { status: false, message: "Checkout options are temporarily unavailable." },
+      { status: 503 },
+    );
+  }
+
   const [{ data: shopData, error: shopError }, { data: zoneData, error: zoneError }] =
     await Promise.all([
       supabaseAdmin
