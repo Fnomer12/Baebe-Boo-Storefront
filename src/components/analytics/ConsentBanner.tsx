@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type Consent = "all" | "essential";
 
 export default function ConsentBanner() {
+  const pathname = usePathname();
   const [choice, setChoice] = useState<Consent | null>();
 
   useEffect(() => {
@@ -13,6 +15,13 @@ export default function ConsentBanner() {
       setChoice(stored === "all" || stored === "essential" ? stored : null),
     );
   }, []);
+
+  // Back-office and counter screens are operational tools, not analytics
+  // surfaces. Keeping the storefront consent prompt out of them prevents it
+  // from obscuring login controls and order-management actions.
+  if (pathname.startsWith("/BaebeAdmin") || pathname.startsWith("/BaebeCounter")) {
+    return null;
+  }
 
   if (choice !== null) return null;
 
