@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Cropper, { type Area } from "react-easy-crop";
 import { supabase } from "@/lib/supabase";
-import AdminPanel, { AdminTab } from "@/components/AdminPanel";
 import {
-  ShieldCheck,
+  adminWorkspaceHref,
+  type AdminWorkspaceTab as AdminTab,
+} from "@/lib/admin-workspace";
+import {
   UploadCloud,
   Trash2,
   Pencil,
@@ -274,11 +276,15 @@ const generateUniqueSku = async (category: string) => {
   return `${generateSku(category)}${Date.now().toString().slice(-2)}`;
 };
 
-export default function BaebeAdminPage() {
+export default function BaebeAdminPage({
+  initialTab = "dashboard",
+}: {
+  initialTab?: AdminTab;
+}) {
   const router = useRouter();
 
   const [checking, setChecking] = useState(true);
- const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
+ const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [products, setProducts] = useState<Product[]>([]);
  const [shops, setShops] = useState<Shop[]>([]);
  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
@@ -760,64 +766,26 @@ useEffect(() => {
   };
 }, []);
 
-const birthdayCount = members.filter((member) => {
-  const today = new Date();
-  const dob = new Date(member.childDob);
-
-  return (
-    dob.getMonth() === today.getMonth() &&
-    dob.getDate() === today.getDate()
-  );
-}).length;
-
-const notificationCount = orders.filter(
-  (order) => order.status === "paid" || order.status === "pending_approval"
-).length;
+const navigateToTab = (tab: AdminTab) => {
+  setActiveTab(tab);
+  router.push(adminWorkspaceHref(tab));
+};
 
   if (checking) {
     return (
-      <main className="h-screen overflow-hidden bg-white text-black">
-        <section className="flex h-full">
-          <aside className="flex w-[300px] shrink-0 flex-col bg-black px-5 py-6 text-white">
-            <h1 className="text-2xl font-semibold">Baebe Boo Admin</h1>
-            <p className="mt-1 text-sm text-white/45">Boss management panel</p>
-
-            <div className="mt-auto rounded-3xl bg-white/10 p-4">
-              <div className="flex items-center gap-2">
-                <ShieldCheck size={18} />
-                <p className="text-sm font-semibold">Secure Access</p>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-white/45">
-                Google OAuth, role checks and protected admin actions.
-              </p>
-            </div>
-          </aside>
-
-          <section className="flex flex-1 items-center justify-center bg-white">
-            <div className="text-center">
-              <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-black/10 border-t-black" />
-              <p className="mt-4 text-sm text-black/50">
-                Verifying administrator access...
-              </p>
-            </div>
-          </section>
-        </section>
-      </main>
+      <section className="flex min-h-[70vh] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-black/10 border-t-black" />
+          <p className="mt-4 text-sm text-black/50">
+            Verifying administrator access...
+          </p>
+        </div>
+      </section>
     );
   }
 
   return (
-    <main className="h-screen overflow-hidden bg-white text-black">
-      <section className="flex h-full">
-        <AdminPanel
-  activeTab={activeTab}
-  setActiveTab={setActiveTab}
-  notificationCount={notificationCount}
-  birthdayCount={birthdayCount}
-/>
-
-        <section className="flex-1 overflow-y-auto bg-white">
-          <div className="mx-auto max-w-7xl px-8 py-10">
+    <div className="min-w-0 text-black">
 
            {activeTab === "dashboard" && (
 <DashboardSection
@@ -832,7 +800,7 @@ const notificationCount = orders.filter(
               <UploadSection
                 shops={shops}
                 setProducts={setProducts}
-                setActiveTab={setActiveTab}
+                setActiveTab={navigateToTab}
               />
             )}
 
@@ -870,10 +838,7 @@ const notificationCount = orders.filter(
     setStaffMembers={setStaffMembers}
   />
 )}
-          </div>
-        </section>
-      </section>
-    </main>
+    </div>
   );
 }
 
