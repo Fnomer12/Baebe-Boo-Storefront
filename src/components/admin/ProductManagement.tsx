@@ -213,7 +213,7 @@ export default function ProductManagement() {
           </p>
         </div>
         <div className="space-y-3">
-          <Link href="/BaebeAdmin/upload" className="ml-auto flex w-fit items-center gap-2 rounded-2xl bg-[#101820] px-4 py-3 text-sm font-semibold text-white">
+          <Link href="/BaebeAdmin/upload" className="ml-auto flex w-fit items-center gap-2 rounded-2xl bg-[#101820] px-4 py-3 text-sm font-semibold !text-white shadow-sm transition hover:bg-[#1d2b36] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28637d] focus-visible:ring-offset-2">
             <Plus size={16} />
             Add product
           </Link>
