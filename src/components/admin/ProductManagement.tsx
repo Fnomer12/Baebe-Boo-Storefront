@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive,
@@ -10,6 +11,7 @@ import {
   CircleCheck,
   Package,
   Pencil,
+  Plus,
   RotateCcw,
   Save,
   SlidersHorizontal,
@@ -210,15 +212,21 @@ export default function ProductManagement() {
             and manage branch stock without leaving this workspace.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <Metric label="Products" value={total} />
-          <Metric label="Active" value={products.filter((product) => product.active).length} />
-          <Metric
-            label="Low stock"
-            value={products.flatMap((product) => product.variants)
-              .flatMap((variant) => variant.inventory)
-              .filter((level) => level.available <= level.reorderPoint).length}
-          />
+        <div className="space-y-3">
+          <Link href="/BaebeAdmin/upload" className="ml-auto flex w-fit items-center gap-2 rounded-2xl bg-[#101820] px-4 py-3 text-sm font-semibold text-white">
+            <Plus size={16} />
+            Add product
+          </Link>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <Metric label="Products" value={total} />
+            <Metric label="Active" value={products.filter((product) => product.active).length} />
+            <Metric
+              label="Low stock"
+              value={products.flatMap((product) => product.variants)
+                .flatMap((variant) => variant.inventory)
+                .filter((level) => level.available <= level.reorderPoint).length}
+            />
+          </div>
         </div>
       </header>
 
