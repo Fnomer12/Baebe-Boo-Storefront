@@ -52,6 +52,7 @@ type AvailabilityRow = {
   shop_id: string;
   stock_quantity: number;
   is_available: boolean;
+  created_at?: string;
 };
 
 type ShopRow = {
@@ -148,15 +149,30 @@ async function loadCatalogRows(productId?: string) {
         .in("product_id", productIds),
       supabaseAdmin
         .from("product_shop_availability")
-        .select("product_id,shop_id,stock_quantity,is_available")
+        .select("product_id,shop_id,stock_quantity,is_available,created_at")
         .in("product_id", productIds),
     ]);
-  if (variantError || availabilityError) {
+  if (availabilityError) {
     databaseFailure("Could not load complete product details.");
   }
 
   const variants = (variantData || []) as VariantRow[];
-  const variantIds = variants.map((variant) => variant.id);
+  const availability = (availabilityData || []) as AvailabilityRow[];
+  const catalogVariants = variantError
+    ? products.map((product) => ({
+        id: `legacy-${product.id}`,
+        product_id: product.id,
+        sku: product.sku || makeSku(),
+        title: product.name,
+        price: product.price,
+        option_values: {},
+        is_default: true,
+        is_active: product.is_active,
+      }))
+    : variants;
+  const variantIds = catalogVariants
+    .map((variant) => variant.id)
+    .filter((id) => !id.startsWith("legacy-"));
   const { data: inventoryData, error: inventoryError } = variantIds.length
     ? await supabaseAdmin
         .from("inventory_levels")
@@ -165,10 +181,7 @@ async function loadCatalogRows(productId?: string) {
         )
         .in("variant_id", variantIds)
     : { data: [], error: null };
-  if (inventoryError) databaseFailure("Could not load inventory levels.");
-
-  const availability = (availabilityData || []) as AvailabilityRow[];
-  const inventory = (inventoryData || []) as InventoryRow[];
+  const inventory = inventoryError ? [] : (inventoryData || []) as InventoryRow[];
   const shopIds = [
     ...new Set([
       ...availability.map((row) => row.shop_id),
@@ -193,7 +206,7 @@ async function loadCatalogRows(productId?: string) {
     gender: product.gender || "",
     sku:
       product.sku ||
-      variants.find(
+      catalogVariants.find(
         (variant) => variant.product_id === product.id && variant.is_default,
       )?.sku ||
       "",
@@ -208,7 +221,7 @@ async function loadCatalogRows(productId?: string) {
         stockQuantity: Number(row.stock_quantity),
         isAvailable: row.is_available,
       })),
-    variants: variants
+    variants: catalogVariants
       .filter((variant) => variant.product_id === product.id)
       .map((variant) => ({
         id: variant.id,
@@ -233,7 +246,27 @@ async function loadCatalogRows(productId?: string) {
               reorderPoint: level.reorder_point,
               updatedAt: level.updated_at,
             };
-          }),
+          })
+          .concat(
+            variant.id.startsWith("legacy-")
+              ? availability
+                  .filter((level) => level.product_id === product.id)
+                  .map((level) => {
+                    const shop = shops.find((row) => row.id === level.shop_id);
+                    return {
+                      id: `legacy-${product.id}-${level.shop_id}`,
+                      shopId: level.shop_id,
+                      shopName: shop?.name || "Shop",
+                      shopLocation: shop?.location || "",
+                      onHand: Number(level.stock_quantity),
+                      reserved: 0,
+                      available: Number(level.stock_quantity),
+                      reorderPoint: 0,
+                      updatedAt: level.created_at || product.created_at,
+                    };
+                  })
+              : [],
+          ),
       })),
   }));
 }
@@ -284,7 +317,33 @@ export async function createProduct(
       .select("id")
       .single();
     if (variantError || !variant) {
-      databaseFailure("Could not create the default product option.");
+      // Legacy production schemas do not have normalized variants yet. The
+      // product and branch availability records still support a complete
+      // catalog workflow, so persist those and let reads synthesize the
+      // default option until the migration is applied.
+      const { error: legacyAvailabilityError } = await supabaseAdmin
+        .from("product_shop_availability")
+        .insert(
+          input.availability.map((level) => ({
+            product_id: createdProductId,
+            shop_id: level.shopId,
+            stock_quantity: level.onHand,
+            is_available: input.isActive,
+          })),
+        );
+      if (legacyAvailabilityError) {
+        databaseFailure("Could not create product availability.");
+      }
+      const createdProduct = (await loadCatalogRows(createdProductId))[0];
+      await recordAudit(
+        actor,
+        "create",
+        "products",
+        createdProductId,
+        null,
+        { ...input, sku },
+      );
+      return createdProduct;
     }
 
     const [{ error: legacyError }, { error: inventoryError }] =
@@ -359,11 +418,9 @@ export async function patchProduct(
       .eq("product_id", productId)
       .eq("is_default", true)
       .maybeSingle();
-  if (previousVariantError) {
-    databaseFailure("Could not load the default product option.");
-  }
+  const legacyVariantSchema = Boolean(previousVariantError);
   const previousVariant = previousVariantData as VariantRow | null;
-  if (!previousVariant) {
+  if (!previousVariant && !legacyVariantSchema) {
     databaseFailure("Product has no default option to update.");
   }
   const rollbackProduct = async () => {
@@ -419,7 +476,7 @@ export async function patchProduct(
     ...(patch.price !== undefined && { price: patch.price }),
     ...(patch.isActive !== undefined && { is_active: patch.isActive }),
   };
-  if (Object.keys(variantChanges).length > 0) {
+  if (previousVariant && Object.keys(variantChanges).length > 0) {
     const { error: variantError } = await supabaseAdmin
       .from("product_variants")
       .update(variantChanges)
@@ -470,7 +527,56 @@ export async function listInventory(input: {
     variantQuery = variantQuery.eq("product_id", input.productId);
   }
   const { data: variantData, error: variantError } = await variantQuery;
-  if (variantError) databaseFailure("Could not load product options.");
+  if (variantError) {
+    // Read inventory from the legacy availability table while normalized
+    // product variants are unavailable in an older production database.
+    let availabilityQuery = supabaseAdmin
+      .from("product_shop_availability")
+      .select("product_id,shop_id,stock_quantity,is_available,created_at")
+      .limit(input.limit);
+    if (input.productId) availabilityQuery = availabilityQuery.eq("product_id", input.productId);
+    if (input.shopId) availabilityQuery = availabilityQuery.eq("shop_id", input.shopId);
+    const { data: availabilityData, error: availabilityError } = await availabilityQuery;
+    if (availabilityError) databaseFailure("Could not load inventory.");
+    const legacyAvailability = (availabilityData || []) as AvailabilityRow[];
+    const productIds = [...new Set(legacyAvailability.map((row) => row.product_id))];
+    const shopIds = [...new Set(legacyAvailability.map((row) => row.shop_id))];
+    const [{ data: products, error: productsError }, { data: shops, error: shopsError }] = await Promise.all([
+      productIds.length
+        ? supabaseAdmin.from("products").select("id,name,sku,is_active").in("id", productIds)
+        : Promise.resolve({ data: [], error: null }),
+      shopIds.length
+        ? supabaseAdmin.from("shops").select("id,name,location,is_active").in("id", shopIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (productsError || shopsError) databaseFailure("Could not load inventory details.");
+    const productRows = (products || []) as Array<{ id: string; name: string; sku: string | null; is_active: boolean }>;
+    const shopRows = (shops || []) as ShopRow[];
+    return legacyAvailability
+      .map((level) => {
+        const product = productRows.find((row) => row.id === level.product_id);
+        const shop = shopRows.find((row) => row.id === level.shop_id);
+        const onHand = Number(level.stock_quantity);
+        return {
+          id: `legacy-${level.product_id}-${level.shop_id}`,
+          variantId: `legacy-${level.product_id}`,
+          productId: level.product_id,
+          productName: product?.name || "Product",
+          sku: product?.sku || "",
+          variantTitle: product?.name || "Default",
+          shopId: level.shop_id,
+          shopName: shop?.name || "Shop",
+          shopLocation: shop?.location || "",
+          onHand,
+          reserved: 0,
+          available: onHand,
+          reorderPoint: 0,
+          lowStock: input.lowStock ? onHand <= 0 : false,
+          updatedAt: level.created_at || new Date().toISOString(),
+        };
+      })
+      .filter((row) => !input.lowStock || row.lowStock);
+  }
   const variants = (variantData || []) as VariantRow[];
   const variantIds = variants.map((variant) => variant.id);
   if (variantIds.length === 0) return [];
