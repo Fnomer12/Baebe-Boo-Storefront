@@ -139,9 +139,6 @@ export const getCounterAuthorization = cache(
 export async function requireAdmin(): Promise<AdminAuthorization> {
   const authorization = await getAdminAuthorization();
   if (!authorization) redirect("/BaebeAdmin/login");
-  if (authorization.assurance.currentLevel !== "aal2") {
-    redirect("/BaebeAdmin/mfa");
-  }
   return authorization;
 }
 
