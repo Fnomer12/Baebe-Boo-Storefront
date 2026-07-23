@@ -58,6 +58,7 @@ function normalizeInventory(value: unknown): AdminInventoryLevel[] {
     const reserved = number(row.reserved);
     return {
       id: text(row.id),
+      variantId: text(row.variantId ?? row.variant_id),
       shopId: text(row.shopId ?? row.shop_id),
       shopName: text(row.shopName ?? row.shop_name, "Branch"),
       shopLocation: text(row.shopLocation ?? row.shop_location),
@@ -188,8 +189,8 @@ export default function ProductManagement() {
     [products],
   );
   const visibleProducts = useMemo(
-    () => filterAdminProducts(products, { query: "", status: "all", category }),
-    [category, products],
+    () => filterAdminProducts(products, { query, status, category }),
+    [category, products, query, status],
   );
   const selected = products.find((product) => product.id === selectedId) ?? null;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -618,14 +619,17 @@ function InventoryLevel({
             setError("");
             const data = new FormData(event.currentTarget);
             try {
-              const response = await fetch(`/api/admin/inventory/${level.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  onHand: number(data.get("onHand")),
-                  reorderPoint: number(data.get("reorderPoint")),
-                }),
-              });
+              const response = await fetch(
+                `/api/admin/inventory/${level.variantId}/${level.shopId}`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    onHand: number(data.get("onHand")),
+                    reorderPoint: number(data.get("reorderPoint")),
+                  }),
+                },
+              );
               const payload = await response.json().catch(() => null);
               if (!response.ok) throw new Error(payload?.message || "Could not update inventory.");
               setEditing(false);
