@@ -4,7 +4,13 @@ export type AdminCapability =
   | "catalog:read"
   | "catalog:write"
   | "inventory:read"
-  | "inventory:write";
+  | "inventory:write"
+  | "stores:read"
+  | "stores:write"
+  | "customers:read"
+  | "customers:write"
+  | "orders:read"
+  | "orders:write";
 
 const roleCapabilities: Record<AdminRole, ReadonlySet<AdminCapability>> = {
   boss: new Set([
@@ -12,17 +18,32 @@ const roleCapabilities: Record<AdminRole, ReadonlySet<AdminCapability>> = {
     "catalog:write",
     "inventory:read",
     "inventory:write",
+    "stores:read",
+    "stores:write",
+    "customers:read",
+    "customers:write",
+    "orders:read",
+    "orders:write",
   ]),
   manager: new Set([
     "catalog:read",
     "catalog:write",
     "inventory:read",
     "inventory:write",
+    "stores:read",
+    "stores:write",
+    "customers:read",
+    "customers:write",
+    "orders:read",
+    "orders:write",
   ]),
   inventory_clerk: new Set([
     "catalog:read",
     "inventory:read",
     "inventory:write",
+    "stores:read",
+    "customers:read",
+    "orders:read",
   ]),
 };
 
