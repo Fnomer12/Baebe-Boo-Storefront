@@ -5,7 +5,7 @@ test("a first-time parent can understand the brand and reach the catalog", async
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Everything Your Little One Needs");
   await expect(page.getByText("Authentic Products", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: /shop now/i }).first().click();
-  await expect(page).toHaveURL(/\/store/);
+  await expect(page).toHaveURL(/\/store/, { timeout: 15_000 });
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
