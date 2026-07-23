@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import Cropper, { type Area } from "react-easy-crop";
 import { supabase } from "@/lib/supabase";
 import {
   adminWorkspaceHref,
-  type AdminWorkspaceTab as AdminTab,
+  type AdminWorkspaceSection as AdminTab,
 } from "@/lib/admin-workspace";
 import {
   UploadCloud,
@@ -786,6 +787,9 @@ const navigateToTab = (tab: AdminTab) => {
 
   return (
     <div className="min-w-0 text-black">
+      {(activeTab === "orders" || activeTab === "notifications" || activeTab === "database") && (
+        <AdminOrdersNavigation activeTab={activeTab} />
+      )}
 
            {activeTab === "dashboard" && (
 <DashboardSection
@@ -823,10 +827,6 @@ const navigateToTab = (tab: AdminTab) => {
   />
 )}
 
-{activeTab === "notifications" && (
-  <NotificationsSection orders={orders} orderItems={orderItems} setOrders={setOrders} />
-)}
-
   {activeTab === "members" && (
   <MembersSection members={members} setMembers={setMembers} />
 )}
@@ -839,6 +839,30 @@ const navigateToTab = (tab: AdminTab) => {
   />
 )}
     </div>
+  );
+}
+
+function AdminOrdersNavigation({ activeTab }: { activeTab: AdminTab }) {
+  const links: Array<{ tab: AdminTab; label: string }> = [
+    { tab: "orders", label: "Order queue" },
+    { tab: "database", label: "Archive" },
+  ];
+
+  return (
+    <nav aria-label="Order workspace views" className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-black/[0.07] bg-white p-2 shadow-sm">
+      {links.map(({ tab, label }) => (
+        <Link
+          key={tab}
+          href={adminWorkspaceHref(tab)}
+          aria-current={activeTab === tab ? "page" : undefined}
+          className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+            activeTab === tab ? "bg-[#101820] text-white" : "text-black/55 hover:bg-black/[0.05] hover:text-black"
+          }`}
+        >
+          {label}
+        </Link>
+      ))}
+    </nav>
   );
 }
 
@@ -2144,6 +2168,10 @@ const receivedOrders = fifoOrders.filter(
   );
 
   const holdOrders = fifoOrders.filter((order) => order.status === "hold" || order.status === "on_hold");
+  const attentionOrders = fifoOrders.filter(
+    (order) =>
+      order.status === "paid" || order.status === "pending_approval",
+  );
 
   const currentOrders =
     view === "received"
@@ -2157,12 +2185,117 @@ const receivedOrders = fifoOrders.filter(
   const getItems = (orderId: string) =>
     orderItems.filter((item) => item.orderId === orderId);
 
+  const approveOrder = async (orderId: string) => {
+    const response = await fetch(`/api/admin/orders/${orderId}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "received" }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      alert(result.message || "Could not approve the order.");
+      return;
+    }
+
+    setOrders((previous) =>
+      previous.map((order) =>
+        order.id === orderId ? { ...order, status: "received" } : order,
+      ),
+    );
+    setSelectedOrder(null);
+  };
+
   return (
     <div>
       <PageHeader
         title="Orders"
-        subtitle="Manage received, dispatched, delivered and on-hold orders using FIFO."
+        subtitle="Review paid orders and manage fulfilment from approval through completion."
       />
+
+      <section
+        aria-labelledby="orders-attention-title"
+        className={`mb-8 overflow-hidden rounded-3xl border ${
+          attentionOrders.length > 0
+            ? "border-amber-200 bg-amber-50"
+            : "border-emerald-200 bg-emerald-50"
+        }`}
+      >
+        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div>
+            <div className="flex items-center gap-3">
+              <span
+                className={`grid h-10 w-10 place-items-center rounded-2xl ${
+                  attentionOrders.length > 0
+                    ? "bg-amber-200 text-amber-900"
+                    : "bg-emerald-200 text-emerald-900"
+                }`}
+              >
+                <ShoppingCart size={18} />
+              </span>
+              <div>
+                <h2 id="orders-attention-title" className="font-semibold">
+                  Orders needing attention
+                </h2>
+                <p className="mt-0.5 text-sm text-black/55">
+                  Paid online orders waiting to enter the fulfilment queue.
+                </p>
+              </div>
+            </div>
+          </div>
+          <span className="w-fit rounded-full bg-black px-3 py-1.5 text-xs font-bold text-white">
+            {attentionOrders.length} waiting
+          </span>
+        </div>
+
+        {attentionOrders.length === 0 ? (
+          <p className="border-t border-emerald-200 px-6 py-4 text-sm font-medium text-emerald-900">
+            All paid orders have been reviewed.
+          </p>
+        ) : (
+          <div className="space-y-3 border-t border-amber-200 p-4 sm:p-5">
+            {attentionOrders.map((order) => {
+              const items = getItems(order.id);
+              return (
+                <article
+                  key={order.id}
+                  className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-sm lg:flex-row lg:items-center"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">
+                      Order #{order.orderNumber || order.id.slice(0, 8)}
+                    </p>
+                    <p className="mt-1 text-sm text-black/55">
+                      {order.customerName} · {items.length} item
+                      {items.length === 1 ? "" : "s"} · GH₵
+                      {order.totalAmount.toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs text-black/40">
+                      {new Date(order.createdAt).toLocaleDateString()} ·{" "}
+                      {new Date(order.createdAt).toLocaleTimeString()}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrder(order)}
+                      className="h-11 rounded-full border border-black/10 bg-white px-5 text-sm font-semibold"
+                    >
+                      View details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => approveOrder(order.id)}
+                      className="h-11 rounded-full bg-black px-5 text-sm font-semibold text-white"
+                    >
+                      Approve to received
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
      <div className="grid gap-4 md:grid-cols-3">
   <OrderStatCard
@@ -2675,100 +2808,6 @@ function DatabaseTab({
     </button>
   );
 }
-
-function NotificationsSection({
-  orders,
-  orderItems,
-  setOrders,
-}: {
-  orders: Order[];
-  orderItems: OrderItem[];
-  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
-}) {
-  const paidOrders = [...orders]
-    .filter((order) => order.status === "paid" || order.status === "pending_approval")
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-  const approveOrder = async (orderId: string) => {
-    const response = await fetch(`/api/admin/orders/${orderId}/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "received" }),
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      alert(result.message || "Could not approve the order.");
-      return;
-    }
-
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === orderId ? { ...order, status: "received" } : order
-      )
-    );
-  };
-
-  const getItems = (orderId: string) =>
-    orderItems.filter((item) => item.orderId === orderId);
-
-  return (
-    <div>
-      <PageHeader
-        title="Notifications"
-        subtitle="Paid online orders waiting for approval. Approve to move them into Received orders."
-      />
-
-      {paidOrders.length === 0 ? (
-        <div className="rounded-3xl border border-black/10 bg-white p-8 text-sm text-black/50">
-          No paid online orders waiting for approval.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {paidOrders.map((order) => {
-            const items = getItems(order.id);
-
-            return (
-              <div
-                key={order.id}
-                className="grid grid-cols-[1fr_170px_150px] items-center gap-4 rounded-3xl border border-black/10 bg-white p-5 shadow-sm"
-              >
-                <div>
-                  <p className="text-sm font-bold">
-                    Order #{order.orderNumber || order.id.slice(0, 8)}
-                  </p>
-                  <p className="mt-1 text-sm text-black/50">
-                    Customer: {order.customerName}
-                  </p>
-                  <p className="mt-2 text-xs text-black/40">
-                    {new Date(order.createdAt).toLocaleDateString()} ·{" "}
-                    {new Date(order.createdAt).toLocaleTimeString()}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold text-black/40">
-                    Items ({items.length})
-                  </p>
-                  <p className="mt-2 text-lg font-bold">
-                    GH₵{order.totalAmount.toLocaleString()}
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => approveOrder(order.id)}
-                  className="h-12 rounded-full bg-black px-6 text-sm font-semibold text-white"
-                >
-                  Approve
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 
 function MembersSection({
   members,
