@@ -71,23 +71,29 @@ export default function AdminLoginPage() {
               {error}
             </div>
           )}
-          <input
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="Username or email"
-            autoComplete="username"
-            className="h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm outline-none focus:border-black"
-            required
-          />
-          <input
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            type="password"
-            placeholder="Password"
-            autoComplete="current-password"
-            className="h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm outline-none focus:border-black"
-            required
-          />
+          <label className="block text-sm font-semibold text-black/70">
+            Username or email
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder="admin or admin@example.com"
+              autoComplete="username"
+              className="mt-2 h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm font-normal outline-none focus:border-black"
+              required
+            />
+          </label>
+          <label className="block text-sm font-semibold text-black/70">
+            Password
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              className="mt-2 h-14 w-full rounded-full border border-black/10 bg-white px-5 text-sm font-normal outline-none focus:border-black"
+              required
+            />
+          </label>
           <button
             type="submit"
             disabled={loading}
