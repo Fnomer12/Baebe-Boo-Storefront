@@ -1,5 +1,6 @@
 export type AdminInventoryLevel = {
   id: string;
+  variantId: string;
   shopId: string;
   shopName: string;
   shopLocation: string;

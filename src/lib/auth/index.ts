@@ -9,3 +9,7 @@ export type {
   AdminAuthorization,
   CounterAuthorization,
 } from "./authorization";
+
+export { authorizeAdminApi } from "./admin-api";
+export { hasAdminCapability } from "./admin-capabilities";
+export type { AdminCapability, AdminRole } from "./admin-capabilities";
