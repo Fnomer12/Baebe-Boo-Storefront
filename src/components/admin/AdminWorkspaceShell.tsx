@@ -5,10 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import {
-  adminWorkspaceRoutes,
-  adminWorkspaceTabFromPathname,
-} from "@/lib/admin-workspace";
+import { adminWorkspaceRoutes, adminWorkspaceTabFromPathname } from "@/lib/admin-workspace";
 
 export default function AdminWorkspaceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -24,13 +21,13 @@ export default function AdminWorkspaceShell({ children }: { children: ReactNode 
   };
 
   return (
-    <main className="min-h-screen bg-[#f6f7f9] text-[#17202a] lg:grid lg:grid-cols-[17.5rem_minmax(0,1fr)]">
+    <div className="admin-shell">
       <button
         type="button"
         aria-label="Open admin navigation"
         aria-expanded={navigationOpen}
         onClick={() => setNavigationOpen(true)}
-        className="fixed left-4 top-4 z-40 grid h-11 w-11 place-items-center rounded-2xl bg-[#101820] text-white shadow-lg lg:hidden"
+        className="admin-menu-button"
       >
         <Menu size={20} />
       </button>
@@ -40,35 +37,43 @@ export default function AdminWorkspaceShell({ children }: { children: ReactNode 
           type="button"
           aria-label="Close admin navigation"
           onClick={() => setNavigationOpen(false)}
-          className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm lg:hidden"
+          className="admin-sidebar-backdrop"
         />
       )}
 
+      {/*
+        `data-navigation-open` rather than `aria-hidden`.
+
+        `aria-hidden={!navigationOpen}` was applied unconditionally, but at
+        >=1024px the CSS forces the sidebar visible — so on every desktop the
+        whole navigation was on screen and simultaneously removed from the
+        accessibility tree. The counter shell already solved this by driving
+        `visibility` from a data attribute, which takes the element out of the
+        accessibility tree AND the tab order together, and only while it really
+        is off-screen. This is that fix, applied to the admin shell too.
+      */}
       <aside
         aria-label="Admin workspace navigation"
-        className={`fixed inset-y-0 left-0 z-50 flex w-[17.5rem] flex-col overflow-y-auto bg-[#101820] px-4 py-5 text-white shadow-2xl transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:shadow-none ${
-          navigationOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        data-navigation-open={navigationOpen ? "true" : "false"}
+        className="admin-sidebar"
       >
-        <div className="flex items-start justify-between gap-3 px-2">
+        <div className="admin-sidebar-brand">
           <div>
-            <Link href="/BaebeAdmin" onClick={() => setNavigationOpen(false)} className="text-xl font-semibold">
-              Baebe Boo Admin
-            </Link>
-            <p className="mt-1 text-xs text-white/55">Commerce operations workspace</p>
+            <span>Baebe Boo</span>
+            <small>Admin workspace</small>
           </div>
           <button
             type="button"
             aria-label="Close admin navigation"
             onClick={() => setNavigationOpen(false)}
-            className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 lg:hidden"
+            className="ml-auto grid h-9 w-9 place-items-center rounded-xl border border-[var(--color-line)] bg-[var(--color-cream)] lg:hidden"
           >
             <X size={17} />
           </button>
         </div>
 
-        <nav className="mt-8 space-y-1.5">
-          {adminWorkspaceRoutes.map(({ tab, label, description, href, icon: Icon }) => {
+        <nav className="admin-sidebar-nav">
+          {adminWorkspaceRoutes.map(({ tab, label, href, icon: Icon }) => {
             const active = tab === activeTab;
             return (
               <Link
@@ -76,52 +81,31 @@ export default function AdminWorkspaceShell({ children }: { children: ReactNode 
                 href={href}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setNavigationOpen(false)}
-                className={`flex items-center gap-3 rounded-2xl px-3 py-3 transition ${
-                  active
-                    ? "bg-white text-[#101820] shadow-sm"
-                    : "text-white/65 hover:bg-white/10 hover:text-white"
-                }`}
               >
-                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${active ? "bg-[#dff3ff]" : "bg-white/10"}`}>
-                  <Icon size={17} />
+                <span className="admin-nav-icon">
+                  <Icon size={18} />
                 </span>
-                <span className="min-w-0">
-                  <strong className="block text-sm">{label}</strong>
-                  <small className={`mt-0.5 block truncate text-[11px] ${active ? "text-black/50" : "text-white/40"}`}>
-                    {description}
-                  </small>
-                </span>
+                {label}
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-auto pt-7">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <ShieldCheck size={17} />
-              Protected workspace
-            </div>
-            <p className="mt-2 text-xs leading-5 text-white/45">
-              Role checks, audit trails and protected operations.
-            </p>
+        <div className="admin-sidebar-footer">
+          <div className="admin-sidebar-badge">
+            <ShieldCheck size={16} />
+            Protected workspace
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-semibold text-[#101820]"
-          >
+          <button type="button" onClick={logout} className="admin-sidebar-logout">
             <LogOut size={16} />
             Sign out
           </button>
         </div>
       </aside>
 
-      <section className="min-w-0">
-        <div className="mx-auto min-h-screen max-w-[100rem] px-4 pb-10 pt-20 sm:px-6 lg:px-8 lg:py-8">
-          {children}
-        </div>
-      </section>
-    </main>
+      <main className="admin-main">
+        {children}
+      </main>
+    </div>
   );
 }

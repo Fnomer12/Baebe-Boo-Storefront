@@ -1,3 +1,9 @@
+import {
+  cartLineOptionValues,
+  cartLineSignature,
+  legacyCartLineFields,
+} from "@/domain/catalog/cart-line-options";
+import type { OptionSelection } from "@/domain/catalog/product-options";
 import type { StorefrontProduct, StorefrontShop } from "../components/storefront/catalog-data";
 
 export const storefrontKeys = {
@@ -18,7 +24,16 @@ export type StorefrontCartItem = {
   imageUrl: string;
   quantity: number;
   variantId?: string;
+  /** The chosen value per option. What every new line is written with. */
+  optionValues?: OptionSelection;
+  /**
+   * @deprecated The pre-variable-products shape. Still written for one release
+   * so pages that have not moved to `optionValues` keep telling lines apart,
+   * and still read so carts saved before the release survive. See
+   * `src/domain/catalog/cart-line-options.ts`.
+   */
   color?: string;
+  /** @deprecated See `color`. */
   size?: string;
   shop?: StorefrontShop;
   shopId?: string;
@@ -52,10 +67,33 @@ export function selectedStore(): StorefrontShop | undefined {
   };
 }
 
-export function addProductToCart(product: StorefrontProduct, options: { color?: string; size?: string; variantId?: string; unitPrice?: number; shop?: StorefrontShop; stockAvailable?: number } = {}): number {
+export function addProductToCart(
+  product: StorefrontProduct,
+  options: {
+    /** The chosen value per option, keyed by lowercase option name. */
+    optionValues?: OptionSelection;
+    /** @deprecated Pass `optionValues`. Folded in for one release. */
+    color?: string;
+    /** @deprecated Pass `optionValues`. Folded in for one release. */
+    size?: string;
+    variantId?: string;
+    unitPrice?: number;
+    shop?: StorefrontShop;
+    stockAvailable?: number;
+  } = {},
+): number {
   const value = readUnknown(storefrontKeys.cart);
   const cart = Array.isArray(value) ? value.filter((item): item is StorefrontCartItem => Boolean(item && typeof item === "object" && "id" in item)) : [];
-  const matchIndex = cart.findIndex((item) => item.id === product.id && item.variantId === options.variantId && item.color === options.color && item.size === options.size && item.shopId === options.shop?.id);
+  const optionValues = cartLineOptionValues(options);
+  const signature = cartLineSignature({
+    id: product.id,
+    variantId: options.variantId,
+    optionValues,
+    shopId: options.shop?.id,
+  });
+  // Matching on the signature rather than field-by-field is what lets a line
+  // saved before the options release merge with the same choice made today.
+  const matchIndex = cart.findIndex((item) => cartLineSignature(item) === signature);
   const updated = [...cart];
   if (matchIndex >= 0) {
     const current = updated[matchIndex];
@@ -72,8 +110,8 @@ export function addProductToCart(product: StorefrontProduct, options: { color?: 
       imageUrl: product.imageUrl,
       quantity: 1,
       variantId: options.variantId,
-      color: options.color,
-      size: options.size,
+      ...(Object.keys(optionValues).length > 0 ? { optionValues } : {}),
+      ...legacyCartLineFields(optionValues),
       shop: options.shop,
       shopId: options.shop?.id,
       stockAvailable: options.stockAvailable,
@@ -100,6 +138,10 @@ export function toggleProductList(key: typeof storefrontKeys.wishlist | typeof s
 
 export function productListContains(key: typeof storefrontKeys.wishlist | typeof storefrontKeys.compare, productId: string): boolean {
   return readStringList(key).includes(productId);
+}
+
+export function compareProductIds(): string[] {
+  return readStringList(storefrontKeys.compare);
 }
 
 export function recordRecentlyViewed(productId: string): void {

@@ -365,7 +365,7 @@ async function main() {
         .from("products")
         .insert({
           name: product.name,
-          description: `${product.description} Image and product reference sourced from Carter's (${product.imageSource.split("?")[0]}).`,
+          description: product.description,
           category: product.category,
           age_range: product.ageRange,
           gender: product.gender,
@@ -385,7 +385,10 @@ async function main() {
         return {
           product_id: productRow.id,
           sku: `${sku}-${String(variantIndex + 1).padStart(2, "0")}`,
-          title: titleParts.join(" / ") || product.name,
+          // Never the product name: the storefront reads variant titles as
+          // option labels when option_values is empty, and a full product name
+          // renders as an unusable colour/size chip.
+          title: titleParts.join(" / ") || "Default Title",
           option_values: Object.fromEntries(Object.entries({ color: option.color, size: option.size }).filter(([, value]) => value)),
           price: product.price,
           compare_at_price: variantIndex === 0 && product.compareAtPrice ? product.compareAtPrice : null,

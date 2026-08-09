@@ -7,8 +7,6 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import ProductCard from "./ProductCard";
 import { catalogProductFromRow, demoCatalogEnabled, fallbackProducts, type PublicCatalogRow, type StorefrontProduct } from "./catalog-data";
 
-type PairingRow = { product_id: string; purchase_count: number | string };
-
 function ProductStrip({ eyebrow, title, products }: { eyebrow: string; title: string; products: StorefrontProduct[] }) {
   if (!products.length) return null;
   return (
@@ -19,9 +17,14 @@ function ProductStrip({ eyebrow, title, products }: { eyebrow: string; title: st
   );
 }
 
-export default function ProductRecommendations({ current }: { current: StorefrontProduct }) {
+export default function ProductRecommendations({
+  current,
+  frequentlyBought = [],
+}: {
+  current: StorefrontProduct;
+  frequentlyBought?: StorefrontProduct[];
+}) {
   const [catalog, setCatalog] = useState<StorefrontProduct[]>(demoCatalogEnabled ? fallbackProducts : []);
-  const [pairings, setPairings] = useState<PairingRow[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -30,20 +33,15 @@ export default function ProductRecommendations({ current }: { current: Storefron
     async function load() {
       if (!isSupabaseConfigured) return;
       const productsRequest = supabase.from("products").select("id,name,category,age_range,gender,price,image_url").eq("is_active", true).limit(48);
-      const pairingRequest = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(current.id)
-        ? supabase.rpc("get_frequently_bought_together", { p_product_id: current.id, p_limit: 4 })
-        : Promise.resolve({ data: [], error: null });
-      const [productsResult, pairingResult] = await Promise.all([productsRequest, pairingRequest]);
+      const productsResult = await productsRequest;
       if (!active) return;
       if (!productsResult.error && productsResult.data?.length) setCatalog((productsResult.data as PublicCatalogRow[]).map(catalogProductFromRow).filter((product): product is StorefrontProduct => Boolean(product)));
-      if (!pairingResult.error && pairingResult.data) setPairings(pairingResult.data as PairingRow[]);
     }
     void load();
     return () => { active = false; window.cancelAnimationFrame(frame); };
   }, [current.id]);
 
   const byId = useMemo(() => new Map(catalog.map((product) => [product.id, product])), [catalog]);
-  const frequentlyBought = pairings.map((pairing) => byId.get(pairing.product_id)).filter((product): product is StorefrontProduct => Boolean(product));
   const recommendations = rankRecommendations(current, catalog).filter((product) => !frequentlyBought.some((paired) => paired.id === product.id));
   const recentlyViewed = recentIds.map((id) => byId.get(id)).filter((product): product is StorefrontProduct => Boolean(product));
 

@@ -2,6 +2,18 @@ import "server-only";
 
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
 
+
+/**
+ * Columns every homepage/store product grid reads.
+ *
+ * The `product_variants` embed is load-bearing: `catalogProductFromRow`
+ * derives `priceFrom`/`priceTo` from it, and that is what makes a variable
+ * product render as "From GH₵89" instead of advertising its cheapest
+ * version as though it were the price of all of them.
+ */
+const HOME_PRODUCT_COLUMNS =
+  "id,name,category,age_range,gender,price,image_url,is_featured,product_variants(price,is_active)";
+
 export async function loadStorefrontHomeData() {
   if (!isSupabaseAdminConfigured) {
     return { products: [], shops: [], bestSellerIds: [] };
@@ -10,13 +22,13 @@ export async function loadStorefrontHomeData() {
   const [productResult, shopResult, bestSellerResult] = await Promise.all([
     supabaseAdmin
       .from("products")
-      .select("id,name,category,age_range,gender,price,image_url")
+      .select(HOME_PRODUCT_COLUMNS)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(100),
     supabaseAdmin
       .from("shops")
-      .select("id,name,location")
+      .select("id,name,location,whatsapp_number")
       .eq("is_active", true)
       .order("created_at", { ascending: true }),
     supabaseAdmin.rpc("get_best_selling_products", { p_limit: 4 }),
@@ -32,7 +44,7 @@ export async function loadStorefrontHomeData() {
   if (missingIds.length) {
     const missingResult = await supabaseAdmin
       .from("products")
-      .select("id,name,category,age_range,gender,price,image_url")
+      .select(HOME_PRODUCT_COLUMNS)
       .in("id", missingIds)
       .eq("is_active", true);
     if (!missingResult.error && missingResult.data) products.push(...missingResult.data);

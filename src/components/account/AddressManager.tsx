@@ -103,26 +103,26 @@ export default function AddressManager({ addresses }: { addresses: SavedAddress[
     }
   }
 
-  const inputClass = "mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:border-sky-500";
+  const inputClass = "mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:border-[var(--color-brand)]";
 
   return (
     <div className="mt-9 grid gap-7 lg:grid-cols-[0.9fr_1.1fr]">
       <div className="space-y-3">
         {addresses.length ? addresses.map((address) => (
-          <article key={address.id} className="rounded-3xl bg-[#f8f5f0] p-5">
+          <article key={address.id} className="rounded-3xl bg-[var(--color-cream)] p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-semibold">{address.label || address.recipient_name}</p>
-                {address.is_default ? <span className="mt-2 inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">Default</span> : null}
+                {address.is_default ? <span className="mt-2 inline-flex rounded-full bg-[var(--color-brand-tint)] px-3 py-1 text-xs font-semibold text-[var(--color-brand-deep)]">Default</span> : null}
               </div>
               <div className="flex gap-3 text-xs font-semibold">
-                <button type="button" onClick={() => setEditing(address)} className="text-sky-700">Edit</button>
+                <button type="button" onClick={() => setEditing(address)} className="text-[var(--color-brand-deep)]">Edit</button>
                 <button type="button" onClick={() => deleteAddress(address.id)} className="text-red-700">Remove</button>
               </div>
             </div>
             <p className="mt-4 text-sm leading-6 text-black/55">{address.address_line_1}{address.address_line_2 ? `, ${address.address_line_2}` : ""}<br />{address.city}, {address.region}{address.digital_address ? ` · ${address.digital_address}` : ""}<br />{address.phone}</p>
           </article>
-        )) : <p className="rounded-3xl border border-dashed border-black/15 bg-[#f8f5f0] p-6 text-sm text-black/55">No saved addresses yet.</p>}
+        )) : <p className="rounded-3xl border border-dashed border-black/15 bg-[var(--color-cream)] p-6 text-sm text-black/55">No saved addresses yet.</p>}
       </div>
 
       <form onSubmit={saveAddress} className="rounded-3xl border border-black/10 p-5 sm:p-6">

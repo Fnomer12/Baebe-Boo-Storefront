@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { authorizeAdminApi } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const statusSchema = z.object({
   status: z.enum([
@@ -22,15 +22,15 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  await requireAdmin();
+  const authorization = await authorizeAdminApi("orders:write");
+  if (!authorization.authorized) return authorization.response;
   const input = statusSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) {
     return NextResponse.json({ message: "Invalid order status." }, { status: 400 });
   }
 
   const { id } = await params;
-  const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.rpc("transition_order", {
+  const { error } = await supabaseAdmin.rpc("transition_order", {
     p_order_id: id,
     p_next_status: input.data.status,
   });

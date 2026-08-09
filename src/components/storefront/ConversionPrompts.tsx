@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Clock3, X } from "lucide-react";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type PromotionRow = {
   id: string;
@@ -32,14 +31,15 @@ export default function ConversionPrompts() {
   useEffect(() => {
     let active = true;
     async function loadPromotion() {
-      if (!isSupabaseConfigured) return;
-      const result = await supabase.from("promotions").select("id,name,description,promotion_type,value,starts_at,ends_at").eq("status", "active").order("ends_at", { ascending: true, nullsFirst: false }).limit(10);
-      if (!active || result.error) return;
+      const response = await fetch("/api/promotions/active");
+      if (!response.ok) return;
+      const result = (await response.json()) as { promotions?: PromotionRow[] };
+      if (!active) return;
       const current = Date.now();
-      const eligible = (result.data as PromotionRow[] | null)?.find((item) => (!item.starts_at || new Date(item.starts_at).getTime() <= current) && (!item.ends_at || new Date(item.ends_at).getTime() > current));
+      const eligible = result.promotions?.find((item) => (!item.starts_at || new Date(item.starts_at).getTime() <= current) && (!item.ends_at || new Date(item.ends_at).getTime() > current));
       if (eligible) setPromotion(eligible);
     }
-    void loadPromotion();
+    void loadPromotion().catch(() => undefined);
     const initialTick = window.setTimeout(() => setNow(Date.now()), 0);
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     const onLeave = (event: MouseEvent) => {

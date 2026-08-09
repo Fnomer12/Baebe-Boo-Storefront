@@ -12,8 +12,9 @@ security layer, and `20260721_z_commerce_foundation.sql` is additive.
    and availability tables).
 3. Apply migrations in filename order. Do not apply the commerce migration before
    the production security migration.
-4. Run `supabase/tests/commerce_foundation.sql`, database advisors, and the checkout
-   concurrency tests before promoting the migration.
+4. Run `supabase/tests/commerce_foundation.sql`, `supabase/tests/counter_sale.sql`,
+   database advisors, and the checkout concurrency tests before promoting the
+   migration.
 5. Regenerate application database types from the migrated staging project.
 
 The commerce migration backfills one default variant for each legacy product and
@@ -30,7 +31,16 @@ normalized reservation and legacy availability models atomically.
   synchronizes legacy branch availability per allocation, posts the idempotent
   1% purchase reward, and marks payment in one split-fulfilment-safe transaction.
 - `transition_order(uuid, text)` enforces the order state machine and audit trail.
-- `complete_counter_sale(uuid, jsonb, text, text, text)` completes a branch sale.
+- `complete_counter_sale(uuid, jsonb, text, text, text, text)` completes a branch
+  sale. The trailing argument is an idempotency key: it is namespaced as
+  `counter:<key>` and claimed by the `orders` insert *before* any stock is
+  decremented, so a retried request returns the original sale instead of ringing
+  up a second one. The cashier is derived from the session and written to
+  `orders.staff_id`; a mismatched `p_staff_id` is rejected.
+- `collect_counter_order(uuid)` hands an online click-and-collect order to the
+  customer at the till. It exists because `transition_order` can only reach
+  `delivered` from `dispatched`/`shipped`, while a pickup order waiting at a
+  counter sits in `received`. Scoped to the caller's own shop and idempotent.
 - `join_family(text, text, text, text, text, date, text, text)` deduplicates family
   enrollment and records email/WhatsApp consent.
 - `record_order_promotion_redemptions(uuid)` idempotently records promotions after

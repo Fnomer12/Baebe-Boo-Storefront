@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function AdminCustomersPage() {
+export default function AdminMembersRedirectPage() {
   redirect("/BaebeAdmin/customers");
 }

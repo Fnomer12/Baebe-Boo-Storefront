@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authorizeCustomerMutation } from "@/lib/account/customer-api";
 import { verifiedReviewSchema } from "@/lib/account/customer-workflows";
+import { creditLoyaltyPoints } from "@/domain/commerce/rewards";
 
 export async function POST(request: Request) {
   const authorization = await authorizeCustomerMutation(request, "verified-review", 3);
@@ -25,6 +26,15 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   }
+
+  await creditLoyaltyPoints(authorization.supabase, {
+    userId: authorization.userId,
+    eventType: "review",
+    sourceKey: `review:${authorization.userId}:${data}`,
+    reason: "Verified purchase review",
+    orderId: input.data.orderId,
+    metadata: { product_id: input.data.productId, rating: input.data.rating },
+  });
 
   return NextResponse.json({ id: data, status: "pending" }, { status: 201 });
 }

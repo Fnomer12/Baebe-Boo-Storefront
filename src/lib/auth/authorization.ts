@@ -11,7 +11,7 @@ export type AdminAuthorization = {
   assurance: {
     currentLevel: string | null;
     nextLevel: string | null;
-  };
+  } | null;
 };
 
 export type CounterAuthorization = {
@@ -42,6 +42,7 @@ type CounterStaffRow = {
   id: string;
   staff_name: string;
   staff_code: string;
+  is_active: boolean;
   shops: CounterShopRow | CounterShopRow[] | null;
 };
 
@@ -69,27 +70,46 @@ export const getAdminAuthorization = cache(
 
     if (authorizationError || isAdmin !== true) return null;
 
-    const { data: assurance, error: assuranceError } =
-      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-
-    if (assuranceError || !assurance) return null;
+    let assurance: AdminAuthorization["assurance"] = null;
+    try {
+      const { data, error: assuranceError } =
+        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (!assuranceError && data) {
+        assurance = {
+          currentLevel: data.currentLevel,
+          nextLevel: data.nextLevel,
+        };
+      }
+    } catch {
+      // MFA is temporarily disabled for the admin portal; do not gate access on it.
+    }
 
     return {
       userId: user.id,
       email: user.email,
       role: "boss",
-      assurance: {
-        currentLevel: assurance.currentLevel,
-        nextLevel: assurance.nextLevel,
-      },
+      assurance,
     };
   },
 );
 
 /**
  * Resolve the current counter assignment without accepting a staff code or
- * shop id from the browser. RLS on `shop_staff` authorizes the row through
- * `staff_authorizations` and limits the result to the signed-in staff member.
+ * shop id from the browser.
+ *
+ * This is the *sole* source of truth for counter authorization — the layout,
+ * every route handler and the shop scoping on every query all derive from it.
+ *
+ * The row is matched on `auth_user_id` HERE, in the query, and not left to RLS.
+ * An earlier version of this function selected with a bare `.limit(1)` and a
+ * comment explaining that `staff_counter_read` narrowed the result to the
+ * caller's own row. That was true of the schema and false of the database: RLS
+ * had been switched off on `shop_staff` in production, so the query returned
+ * whichever row sorted first and *every* counter session — every cashier, and
+ * in fact any signed-in Supabase user at all — became that person, at that
+ * person's shop. See 20260807_restore_row_security.sql, which turns RLS back
+ * on. Both halves are load-bearing: the filter below is the one that does not
+ * depend on a setting somebody can flip in a dashboard.
  */
 export const getCounterAuthorization = cache(
   async (): Promise<CounterAuthorization | null> => {
@@ -102,16 +122,24 @@ export const getCounterAuthorization = cache(
 
     if (userError || !user?.id || !user.email) return null;
 
+    // `.limit(1)` rather than `.maybeSingle()`: `shop_staff_auth_user_uidx` is
+    // a partial unique index on `auth_user_id`, so at most one row can match
+    // and the limit is belt and braces. Should that ever stop holding,
+    // PostgREST answers `maybeSingle()` with PGRST116 and the cashier is
+    // silently locked out of the till mid-shift; taking the first row degrades
+    // to "signed in at one of your shops" instead.
     const { data, error: authorizationError } = await supabase
       .from("shop_staff")
       .select(
-        "id, staff_name, staff_code, shops (id, name, location, database_name, is_active)",
+        "id, staff_name, staff_code, is_active, shops (id, name, location, database_name, is_active)",
       )
-      .maybeSingle();
+      .eq("auth_user_id", user.id)
+      .eq("is_active", true)
+      .limit(1);
 
-    if (authorizationError || !data) return null;
+    if (authorizationError || !data?.length) return null;
 
-    const staff = data as CounterStaffRow;
+    const staff = data[0] as CounterStaffRow;
     const shop = Array.isArray(staff.shops) ? staff.shops[0] : staff.shops;
 
     if (!staff.id || !staff.staff_code || !shop?.id || !shop.is_active) {

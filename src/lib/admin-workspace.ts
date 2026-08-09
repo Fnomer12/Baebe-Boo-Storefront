@@ -1,8 +1,13 @@
 import {
+  BookOpen,
   ClipboardList,
+  Coins,
   LayoutDashboard,
   Package,
+  Percent,
+  ShoppingCart,
   Store,
+  Truck,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -10,28 +15,17 @@ import {
 export const adminWorkspaceTabs = [
   "dashboard",
   "products",
+  "procurement",
+  "finance",
+  "promotions",
   "orders",
   "customers",
   "stores",
+  "delivery",
+  "parenting",
 ] as const;
 
 export type AdminWorkspaceTab = (typeof adminWorkspaceTabs)[number];
-
-export const adminWorkspaceSections = [
-  "dashboard",
-  "upload",
-  "store",
-  "products",
-  "orders",
-  "database",
-  "notifications",
-  "members",
-  "customers",
-  "settings",
-  "stores",
-] as const;
-
-export type AdminWorkspaceSection = (typeof adminWorkspaceSections)[number];
 
 export type AdminWorkspaceRoute = {
   tab: AdminWorkspaceTab;
@@ -57,6 +51,27 @@ export const adminWorkspaceRoutes: readonly AdminWorkspaceRoute[] = [
     icon: Package,
   },
   {
+    tab: "procurement",
+    label: "Procurement",
+    description: "Suppliers and purchase orders",
+    href: "/BaebeAdmin/procurement",
+    icon: ShoppingCart,
+  },
+  {
+    tab: "finance",
+    label: "Finance",
+    description: "Expenses and category summary",
+    href: "/BaebeAdmin/finance",
+    icon: Coins,
+  },
+  {
+    tab: "promotions",
+    label: "Promotions",
+    description: "Promotions, gift vouchers and loyalty rules",
+    href: "/BaebeAdmin/promotions",
+    icon: Percent,
+  },
+  {
     tab: "orders",
     label: "Orders",
     description: "Fulfilment queue",
@@ -77,58 +92,28 @@ export const adminWorkspaceRoutes: readonly AdminWorkspaceRoute[] = [
     href: "/BaebeAdmin/stores",
     icon: Store,
   },
+  {
+    tab: "delivery",
+    label: "Delivery",
+    description: "Delivery zones and fees",
+    href: "/BaebeAdmin/delivery",
+    icon: Truck,
+  },
+  {
+    tab: "parenting",
+    label: "Parenting",
+    description: "Parenting Hub articles",
+    href: "/BaebeAdmin/parenting",
+    icon: BookOpen,
+  },
 ] as const;
 
 export function isAdminWorkspaceTab(value: string): value is AdminWorkspaceTab {
   return adminWorkspaceTabs.some((tab) => tab === value);
 }
 
-export function isAdminWorkspaceSection(value: string): value is AdminWorkspaceSection {
-  return adminWorkspaceSections.some((section) => section === value);
-}
-
-export function adminWorkspaceHref(section: AdminWorkspaceSection) {
-  switch (section) {
-    case "upload":
-      return "/BaebeAdmin/upload";
-    case "store":
-    case "products":
-      return "/BaebeAdmin/products";
-    case "database":
-      return "/BaebeAdmin/orders?view=archive";
-    case "notifications":
-      return "/BaebeAdmin/orders";
-    case "members":
-    case "customers":
-      return "/BaebeAdmin/customers";
-    case "settings":
-    case "stores":
-      return "/BaebeAdmin/stores";
-    case "orders":
-      return "/BaebeAdmin/orders";
-    default:
-      return "/BaebeAdmin";
-  }
-}
-
 export function adminWorkspaceTabFromPathname(pathname: string): AdminWorkspaceTab {
   const segment = pathname.split("/").filter(Boolean)[1];
-  switch (segment) {
-    case "upload":
-    case "store":
-    case "products":
-      return "products";
-    case "database":
-    case "notifications":
-    case "orders":
-      return "orders";
-    case "members":
-    case "customers":
-      return "customers";
-    case "settings":
-    case "stores":
-      return "stores";
-    default:
-      return "dashboard";
-  }
+  if (isAdminWorkspaceTab(segment)) return segment;
+  return "dashboard";
 }

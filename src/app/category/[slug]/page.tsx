@@ -5,7 +5,7 @@ import { categories } from "@/components/storefront/catalog-data";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const category = categories.find((item) => item.slug === slug);
-  return { title: `${category?.name || "Collection"} | Baebe Boo`, description: `Shop carefully chosen ${category?.name.toLowerCase() || "baby and children essentials"} at Baebe Boo.` };
+  return { title: `${category?.name || "Collection"}`, description: `Shop carefully chosen ${category?.name.toLowerCase() || "baby and children essentials"} at Baebe Boo.` };
 }
 
 export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {

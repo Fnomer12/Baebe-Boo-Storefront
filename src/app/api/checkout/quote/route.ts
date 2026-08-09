@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       productIds: [...new Set(basket.variants.map((variant) => variant.productId))],
       deliveryFee: basket.deliveryFee,
       promotionCode: typeof body.promotionCode === "string" ? body.promotionCode : null,
+      voucherCode: typeof body.voucherCode === "string" ? body.voucherCode : null,
       customerUserId: authData?.user?.id || null,
     });
 
@@ -58,11 +59,15 @@ export async function POST(request: Request) {
       data: {
         subtotal: quote.subtotal,
         discount: quote.discount,
+        voucherCredit: quote.voucherCredit,
         deliveryFee: quote.deliveryFee,
         total: quote.total,
         promotionMessage: quote.promotionMessage,
         promotionApplied: quote.appliedPromotions.some((promotion) => promotion.code),
         promotionCodeValid: quote.promotionCodeValid,
+        voucherCode: quote.voucherCode,
+        voucherCodeValid: quote.voucherCodeValid,
+        voucherMessage: quote.voucherMessage,
         split: basket.allocation.split,
         shipmentCount: basket.allocation.allocations.length,
       },

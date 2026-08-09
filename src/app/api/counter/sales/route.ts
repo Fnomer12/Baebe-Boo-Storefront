@@ -1,45 +1,67 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { requireCounter } from "@/lib/auth";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { authorizeCounterApi } from "@/lib/auth";
+import { CounterError } from "@/lib/counter/errors";
+import { listCounterSales, recordCounterSale } from "@/lib/counter/sales";
+import { refreshProfitReports } from "@/lib/admin/refresh-reports";
+import {
+  counterSaleCreateSchema,
+  counterSalesQuerySchema,
+} from "@/lib/counter/counter-schemas";
 
-const saleSchema = z.object({
-  items: z.array(z.object({ productId: z.uuid(), quantity: z.int().min(1).max(100) })).min(1).max(50),
-  paymentMethod: z.enum(["cash", "visa", "momo"]),
-  customerName: z.string().trim().max(120).optional(),
-  customerPhone: z.string().trim().max(24).optional(),
-});
+function counterError(error: unknown, fallback: string) {
+  if (error instanceof CounterError) {
+    return NextResponse.json({ message: error.message }, { status: error.status });
+  }
+  return NextResponse.json({ message: fallback }, { status: 500 });
+}
+
+export async function GET(request: Request) {
+  const authorization = await authorizeCounterApi();
+  if (!authorization.authorized) return authorization.response;
+
+  const { searchParams } = new URL(request.url);
+  const query = counterSalesQuerySchema.safeParse({
+    limit: searchParams.get("limit") ?? undefined,
+  });
+
+  const { staff } = authorization.counter;
+  try {
+    const digest = await listCounterSales(staff.shop.id, staff.id, {
+      limit: query.success ? query.data.limit : 50,
+    });
+    return NextResponse.json(digest);
+  } catch (error) {
+    return counterError(error, "Sales could not be loaded.");
+  }
+}
 
 export async function POST(request: Request) {
-  const authorization = await requireCounter();
-  const input = saleSchema.safeParse(await request.json().catch(() => null));
-  if (!input.success) return NextResponse.json({ message: "Invalid counter sale." }, { status: 400 });
+  const authorization = await authorizeCounterApi();
+  if (!authorization.authorized) return authorization.response;
 
-  const supabase = await createServerSupabaseClient();
-  const productIds = [...new Set(input.data.items.map((item) => item.productId))];
-  const { data: variants, error: variantError } = await supabase
-    .from("product_variants")
-    .select("id, product_id, is_default")
-    .in("product_id", productIds)
-    .eq("is_active", true);
-  if (variantError || !variants) return NextResponse.json({ message: "Could not validate product options." }, { status: 409 });
+  const input = counterSaleCreateSchema.safeParse(
+    await request.json().catch(() => null),
+  );
+  if (!input.success) {
+    // Generic text on purpose: zod issue paths would describe the shape of the
+    // request to anyone probing the endpoint.
+    return NextResponse.json({ message: "Invalid sale details." }, { status: 400 });
+  }
 
-  const rpcItems = input.data.items.map((item) => {
-    const candidates = variants.filter((variant) => variant.product_id === item.productId);
-    const variant = candidates.find((candidate) => candidate.is_default) || candidates[0];
-    return variant ? { variant_id: variant.id, quantity: item.quantity } : null;
-  });
-  if (rpcItems.some((item) => !item)) return NextResponse.json({ message: "A product has no sellable option." }, { status: 409 });
-
-  const { data, error } = await supabase.rpc("complete_counter_sale", {
-    p_staff_id: authorization.staff.id,
-    p_items: rpcItems,
-    p_payment_method: input.data.paymentMethod,
-    p_customer_name: input.data.customerName || "Walk-in Customer",
-    p_customer_phone: input.data.customerPhone || "",
-  });
-  if (error) return NextResponse.json({ message: error.message || "Could not complete sale." }, { status: 409 });
-
-  const sale = Array.isArray(data) ? data[0] : data;
-  return NextResponse.json({ sale });
+  const { staff } = authorization.counter;
+  try {
+    const sale = await recordCounterSale(staff.shop.id, staff.id, input.data);
+    // In-store sales are the reason the dashboard's two revenue figures
+    // disagreed: they land in `orders` immediately, but the profit report reads
+    // a materialized snapshot that nothing refreshed. Awaited so the owner's
+    // dashboard is correct by the time the cashier hands over the receipt, and
+    // deliberately not allowed to fail the sale — the money is already taken.
+    const { error: reportError } = await refreshProfitReports();
+    if (reportError) {
+      console.error("counter sale: profit report refresh failed", reportError);
+    }
+    return NextResponse.json({ sale }, { status: 201 });
+  } catch (error) {
+    return counterError(error, "The sale could not be completed.");
+  }
 }

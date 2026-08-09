@@ -5,7 +5,7 @@ export async function GET() {
   if (!isSupabaseAdminConfigured) {
     return NextResponse.json(
       { status: false, message: "Checkout options are temporarily unavailable." },
-      { status: 503 },
+      { headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -18,7 +18,7 @@ export async function GET() {
         .order("created_at", { ascending: true }),
       supabaseAdmin
         .from("delivery_zones")
-        .select("id,name,base_fee,free_delivery_threshold,estimated_days_min,estimated_days_max")
+        .select("id,name,regions,base_fee,free_delivery_threshold,estimated_days_min,estimated_days_max")
         .eq("is_active", true)
         .order("name", { ascending: true }),
     ]);
@@ -26,7 +26,7 @@ export async function GET() {
   if (shopError || zoneError) {
     return NextResponse.json(
       { status: false, message: "Checkout options are temporarily unavailable." },
-      { status: 503 },
+      { headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -41,6 +41,7 @@ export async function GET() {
       deliveryZones: (zoneData || []).map((zone) => ({
         id: String(zone.id),
         name: String(zone.name),
+        regions: Array.isArray(zone.regions) ? zone.regions.map(String) : [],
         baseFee: Number(zone.base_fee),
         freeDeliveryThreshold:
           zone.free_delivery_threshold === null

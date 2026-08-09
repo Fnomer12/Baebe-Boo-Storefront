@@ -17,6 +17,7 @@
 
 # next.js
 /.next/
+/.next-static-archive/
 /out/
 
 # production
@@ -42,3 +43,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# QA fixture credentials written by scripts/qa/fixtures.mjs
+.qa-fixtures.json
+
+# local QA screenshots and agent tooling state
+/screenshots/
+/.caliber/

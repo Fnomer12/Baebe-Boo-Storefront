@@ -20,7 +20,7 @@ type OrderRecord = {
   deliveryAddress: string;
   digitalAddress: string;
   orderStatus: string;
-  shippingStatus: "received" | "shipped" | "delivered";
+  shippingStatus: "received" | "shipped" | "delivered" | "cancelled";
   createdAt: string;
   shippedAt: string | null;
   deliveredAt: string | null;
@@ -28,7 +28,6 @@ type OrderRecord = {
 
 type OrderApiRecord = {
   id: string;
-  record_code?: string | null;
   order_number?: string | null;
   customer_name?: string | null;
   total_amount?: number | string | null;
@@ -83,8 +82,9 @@ export default function TrackRecordsPage() {
 
   const mapOrder = (order: OrderApiRecord): OrderRecord => ({
       id: order.id,
-      recordCode:
-        order.record_code || `#BBS-${order.id.slice(0, 6).toUpperCase()}`,
+      recordCode: order.order_number
+        ? `#${order.order_number}`
+        : `#BBS-${order.id.slice(0, 6).toUpperCase()}`,
       orderNumber: order.order_number || "",
       customerName: order.customer_name || "Customer",
       totalAmount: Number(order.total_amount || 0),
@@ -206,13 +206,15 @@ function TrackCard({ order }: { order: OrderRecord }) {
             GH₵{order.totalAmount.toLocaleString()}
           </p>
 
-          <p className="mt-2 break-words text-sm leading-6 text-black/50">
+          <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-black/50">
             {order.deliveryAddress || "No delivery address"}
           </p>
 
-          <p className="mt-1 break-words text-xs font-semibold leading-5 text-black/40">
-            Digital Address: {order.digitalAddress || "Not provided"}
-          </p>
+          {order.digitalAddress && (
+            <p className="mt-1 break-words text-xs font-semibold leading-5 text-black/40">
+              GhanaPost GPS: {order.digitalAddress}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center overflow-x-auto pb-2 xl:overflow-visible xl:pb-0">

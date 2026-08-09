@@ -1223,12 +1223,14 @@ begin
   if coalesce(auth.jwt() ->> 'role', '') = 'service_role' then
     select staff.shop_id into v_shop_id from public.shop_staff staff where staff.id = p_staff_id;
   else
+    -- `authorization` is a reserved (type_func_name) keyword and is not a legal
+    -- bare table alias, so this join uses `staff_access`.
     select staff.shop_id into v_shop_id
-    from public.staff_authorizations authorization
-    join public.shop_staff staff on staff.id = authorization.staff_id
-    where authorization.staff_id = p_staff_id
-      and authorization.active
-      and lower(authorization.email) = lower(auth.jwt() ->> 'email');
+    from public.staff_authorizations staff_access
+    join public.shop_staff staff on staff.id = staff_access.staff_id
+    where staff_access.staff_id = p_staff_id
+      and staff_access.active
+      and lower(staff_access.email) = lower(auth.jwt() ->> 'email');
   end if;
   if v_shop_id is null then raise exception 'Counter is not authorized for a shop'; end if;
 

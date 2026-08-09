@@ -1,21 +1,23 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Archive,
   Boxes,
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  Layers,
   Package,
   Pencil,
   Plus,
   RotateCcw,
   Save,
   SlidersHorizontal,
-  X,
+  Star,
+  Trash2,
 } from "lucide-react";
 import {
   filterAdminProducts,
@@ -24,10 +26,18 @@ import {
   type AdminProductVariant,
 } from "@/domain/admin-products";
 import {
+  optionKey,
+  parseProductOptions,
+  variantOptionValues,
+  type ProductOption,
+} from "@/domain/catalog/product-options";
+import { formatCedis } from "@/domain/money";
+import {
   AdminEmptyState,
   AdminErrorState,
   AdminFilterBar,
 } from "@/components/admin/AdminWorkspacePrimitives";
+import ProductWizardModal, { type WizardMode } from "@/components/admin/products/ProductWizardModal";
 
 type ApiRecord = Record<string, unknown>;
 type ProductResponse = {
@@ -73,34 +83,49 @@ function normalizeInventory(value: unknown): AdminInventoryLevel[] {
   }).filter((item) => item.id);
 }
 
-function normalizeVariants(value: unknown): AdminProductVariant[] {
+function normalizeVariants(value: unknown, productId: string): AdminProductVariant[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => {
     const row = item as ApiRecord;
+    const compareAt = row.compareAtPrice ?? row.compare_at_price;
+    const inventory = normalizeInventory(row.inventory ?? row.inventoryLevels);
+    const id = text(row.id);
     return {
-      id: text(row.id),
+      id,
       sku: text(row.sku),
       title: text(row.title, "Default"),
       price: number(row.price),
+      compareAtPrice:
+        compareAt === null || compareAt === undefined ? null : number(compareAt),
       active: boolean(row.active ?? row.isActive ?? row.is_active, true),
       isDefault: boolean(row.isDefault ?? row.is_default),
+      imageUrl: text(row.imageUrl ?? row.image_url),
       optionValues:
         row.optionValues && typeof row.optionValues === "object"
           ? row.optionValues as Record<string, unknown>
           : row.option_values && typeof row.option_values === "object"
             ? row.option_values as Record<string, unknown>
             : {},
-      inventory: normalizeInventory(row.inventory ?? row.inventoryLevels),
+      // `variantId` is only set on levels the inventory endpoint returns; the
+      // ones nested under a variant know their own parent implicitly.
+      inventory: inventory.map((level) => ({
+        ...level,
+        variantId: level.variantId || id,
+      })),
     };
-  }).filter((variant) => variant.id);
+  }).filter((variant) => variant.id && productId);
 }
 
 function normalizeProducts(value: unknown): AdminProduct[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => {
     const row = item as ApiRecord;
+    const gallery = Array.isArray(row.gallery)
+      ? row.gallery.filter((url): url is string => typeof url === "string")
+      : [];
+    const id = text(row.id);
     return {
-      id: text(row.id),
+      id,
       name: text(row.name, "Untitled product"),
       description: text(row.description),
       category: text(row.category, "Uncategorised"),
@@ -109,30 +134,22 @@ function normalizeProducts(value: unknown): AdminProduct[] {
       price: number(row.price),
       sku: text(row.sku),
       imageUrl: text(row.imageUrl ?? row.image_url),
+      gallery,
       active: boolean(row.active ?? row.isActive ?? row.is_active, true),
+      featured: boolean(row.featured ?? row.isFeatured ?? row.is_featured),
       createdAt: text(row.createdAt ?? row.created_at),
-      variants: normalizeVariants(row.variants),
+      // Tolerant on purpose: the server sends a clean array, but the column it
+      // comes from is new and a product that predates it must open in the
+      // editor as the variable product its variants say it is.
+      options: parseProductOptions(row.options),
+      variants: normalizeVariants(row.variants, id),
     };
   }).filter((product) => product.id);
 }
 
-function attachInventory(products: AdminProduct[], value: unknown) {
-  if (!Array.isArray(value)) return products;
-  const records = value as ApiRecord[];
-  return products.map((product) => ({
-    ...product,
-    variants: product.variants.map((variant) => ({
-      ...variant,
-      inventory: normalizeInventory(
-        records.filter((record) =>
-          text(record.variantId ?? record.variant_id) === variant.id,
-        ),
-      ),
-    })),
-  }));
-}
-
 export default function ProductManagement() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "archived">("all");
@@ -142,6 +159,7 @@ export default function ProductManagement() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editor, setEditor] = useState<{ mode: WizardMode; productId: string | null } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -153,20 +171,18 @@ export default function ProductManagement() {
         page: String(page),
         pageSize: String(pageSize),
       });
-      const [productResponse, inventoryResponse] = await Promise.all([
-        fetch(`/api/admin/products?${parameters}`, { cache: "no-store" }),
-        fetch("/api/admin/inventory?limit=500", { cache: "no-store" }),
-      ]);
-      if (!productResponse.ok) {
-        const failure = await productResponse.json().catch(() => null);
+      // One request. The separate `/api/admin/inventory?limit=500` this used to
+      // fire alongside it was both redundant — every product already arrives
+      // with its variants' stock levels attached — and quietly wrong: it
+      // truncated at 500 rows, so on a catalogue of any size the merge blanked
+      // the stock of every variant past the cut-off.
+      const response = await fetch(`/api/admin/products?${parameters}`, { cache: "no-store" });
+      if (!response.ok) {
+        const failure = await response.json().catch(() => null);
         throw new Error(failure?.message || "The product catalog is not available yet.");
       }
-      const payload = await productResponse.json() as ProductResponse;
-      let nextProducts = normalizeProducts(payload.products);
-      if (inventoryResponse.ok) {
-        const inventoryPayload = await inventoryResponse.json() as { inventory?: unknown };
-        nextProducts = attachInventory(nextProducts, inventoryPayload.inventory);
-      }
+      const payload = await response.json() as ProductResponse;
+      const nextProducts = normalizeProducts(payload.products);
       setProducts(nextProducts);
       setTotal(number(payload.total, nextProducts.length));
       setSelectedId((current) =>
@@ -186,6 +202,21 @@ export default function ProductManagement() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  // `/BaebeAdmin/upload` is now a redirect to here, so every old bookmark and
+  // the workspace alias map arrive as `?new=1` and open the wizard on their own.
+  // Derived rather than pushed into state by an effect: an effect would fire a
+  // second render before the modal appeared, and would reopen the form every
+  // time anything else on the page re-rendered with the parameter still set.
+  const wantsNewProduct = searchParams.get("new") === "1";
+  const activeEditor = editor ?? (wantsNewProduct ? { mode: "create" as const, productId: null } : null);
+
+  function closeEditor() {
+    setEditor(null);
+    // The parameter goes with the form, or closing and reopening the page
+    // would put the seller back in front of a blank product.
+    if (wantsNewProduct) router.replace("/BaebeAdmin/products");
+  }
+
   const categories = useMemo(
     () => [...new Set(products.map((product) => product.category))].sort(),
     [products],
@@ -195,6 +226,7 @@ export default function ProductManagement() {
     [category, products, query, status],
   );
   const selected = products.find((product) => product.id === selectedId) ?? null;
+  const beingEdited = products.find((product) => product.id === activeEditor?.productId) ?? null;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -213,10 +245,14 @@ export default function ProductManagement() {
           </p>
         </div>
         <div className="space-y-3">
-          <Link href="/BaebeAdmin/upload" className="ml-auto flex w-fit items-center gap-2 rounded-2xl bg-[#101820] px-4 py-3 text-sm font-semibold !text-white shadow-sm transition hover:bg-[#1d2b36] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28637d] focus-visible:ring-offset-2">
+          <button
+            type="button"
+            onClick={() => setEditor({ mode: "create", productId: null })}
+            className="ml-auto flex min-h-11 w-fit items-center gap-2 rounded-2xl bg-[#101820] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d2b36] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28637d] focus-visible:ring-offset-2"
+          >
             <Plus size={16} />
             Add product
-          </Link>
+          </button>
           <div className="grid grid-cols-3 gap-2 text-center">
             <Metric label="Products" value={total} />
             <Metric label="Active" value={products.filter((product) => product.active).length} />
@@ -271,13 +307,19 @@ export default function ProductManagement() {
           icon={<Package size={24} />}
         />
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_28rem]">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_28rem]">
           <ProductList
             products={visibleProducts}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
-          {selected && <ProductDetail product={selected} onSaved={load} />}
+          {selected && (
+            <ProductDetail
+              product={selected}
+              onSaved={load}
+              onEdit={(mode) => setEditor({ mode, productId: selected.id })}
+            />
+          )}
         </div>
       )}
 
@@ -301,6 +343,19 @@ export default function ProductManagement() {
             <ChevronRight size={17} />
           </button>
         </nav>
+      )}
+
+      {/* Mounted only while it is open, and keyed per session: the wizard seeds
+          every field from these props once, so "reopen" has to mean a fresh
+          component rather than an effect racing the catalogue's next refresh. */}
+      {activeEditor && (
+        <ProductWizardModal
+          key={`${activeEditor.mode}:${activeEditor.productId ?? "new"}`}
+          mode={activeEditor.mode}
+          product={beingEdited}
+          onClose={closeEditor}
+          onSaved={load}
+        />
       )}
     </div>
   );
@@ -376,7 +431,7 @@ function ProductList({
                   {product.sku || product.variants[0]?.sku || "No SKU"} · {product.category}
                 </small>
               </span>
-              <span className="hidden text-sm font-semibold sm:block">GH₵{product.price.toLocaleString()}</span>
+              <span className="hidden text-sm font-semibold sm:block">{formatCedis(product.price)}</span>
               <span className="text-right">
                 <strong className="block text-sm">{available}</strong>
                 <small className="text-[10px] uppercase tracking-wide text-black/40">available</small>
@@ -404,27 +459,28 @@ function ProductImage({ product }: { product: AdminProduct }) {
 function ProductDetail({
   product,
   onSaved,
+  onEdit,
 }: {
   product: AdminProduct;
   onSaved: () => Promise<void>;
+  onEdit: (mode: WizardMode) => void;
 }) {
-  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const options = product.options ?? [];
 
-  async function updateProduct(body: ApiRecord, method = "PATCH") {
+  async function archiveOrRestore() {
     setSaving(true);
     setMessage("");
     try {
       const response = await fetch(`/api/admin/products/${product.id}`, {
-        method,
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: method === "DELETE" ? undefined : JSON.stringify(body),
+        body: JSON.stringify({ isActive: !product.active }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.message || "Could not update this product.");
-      setEditing(false);
-      setMessage("Product saved.");
+      setMessage(product.active ? "Product archived." : "Product restored.");
       await onSaved();
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "Could not save product.");
@@ -433,51 +489,118 @@ function ProductDetail({
     }
   }
 
+  async function toggleFeatured() {
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/admin/products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isFeatured: !product.featured }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Could not update this product.");
+      setMessage(
+        product.featured
+          ? "Removed from the homepage."
+          : "This product now appears on the homepage.",
+      );
+      await onSaved();
+    } catch (saveError) {
+      setMessage(saveError instanceof Error ? saveError.message : "Could not save product.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteForever() {
+    if (
+      !window.confirm(
+        `Delete "${product.name}" permanently? This removes the product, its versions and stock records, and cannot be undone. Use Archive to retire a product you have sold.`,
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/admin/products/${product.id}`, {
+        method: "DELETE",
+      });
+      const payload = response.status === 204 ? null : await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Could not delete this product.");
+      await onSaved();
+    } catch (deleteError) {
+      setMessage(
+        deleteError instanceof Error ? deleteError.message : "Could not delete this product.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <aside className="h-fit rounded-3xl border border-black/[0.07] bg-white p-5 shadow-sm xl:sticky xl:top-8">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div>
+        <span className="inline-flex flex-wrap items-center gap-1.5">
           <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
             product.active ? "bg-emerald-100 text-emerald-800" : "bg-black/5 text-black/45"
           }`}>
             {product.active ? "Active" : "Archived"}
           </span>
-          <h2 className="mt-3 text-xl font-semibold">{product.name}</h2>
-          <p className="mt-1 text-xs text-black/45">{product.sku || product.variants[0]?.sku || "No SKU"}</p>
-        </div>
+          {product.featured && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+              <Star size={10} /> Featured
+            </span>
+          )}
+        </span>
+        <h2 className="mt-3 text-xl font-semibold">{product.name}</h2>
+        <p className="mt-1 text-xs text-black/45">{product.sku || product.variants[0]?.sku || "No SKU"}</p>
+      </div>
+
+      {/* Two doors, because they are two different saves. Details is a PATCH
+          that cannot touch a variable product's price at all; versions is a
+          full replace of the option list and the grid. */}
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <button
           type="button"
-          onClick={() => setEditing((current) => !current)}
-          className="grid h-10 w-10 place-items-center rounded-xl bg-[#eaf6fb] text-[#28637d]"
-          aria-label={editing ? "Close product editor" : "Edit product"}
+          onClick={() => onEdit("details")}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-black/10 bg-white px-3 text-sm font-semibold"
         >
-          {editing ? <X size={17} /> : <Pencil size={17} />}
+          <Pencil size={15} /> Edit details
+        </button>
+        <button
+          type="button"
+          onClick={() => onEdit("versions")}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-black/10 bg-white px-3 text-sm font-semibold"
+        >
+          <Layers size={15} /> Edit versions &amp; stock
         </button>
       </div>
 
-      {editing ? (
-        <ProductEditForm
-          product={product}
-          saving={saving}
-          onSubmit={(patch) => void updateProduct(patch)}
+      <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
+        <Detail label="Category" value={product.category} />
+        <Detail label="Age" value={product.ageRange || "Not set"} />
+        <Detail label="Gender" value={product.gender} />
+        <Detail
+          label={options.length > 0 ? "From" : "Price"}
+          value={formatCedis(product.price)}
         />
-      ) : (
-        <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-          <Detail label="Category" value={product.category} />
-          <Detail label="Age" value={product.ageRange || "Not set"} />
-          <Detail label="Gender" value={product.gender} />
-          <Detail label="Price" value={`GH₵${product.price.toLocaleString()}`} />
-        </dl>
-      )}
+      </dl>
 
       <div className="mt-6 border-t border-black/[0.07] pt-5">
         <div className="flex items-center gap-2">
           <Boxes size={17} />
-          <h3 className="font-semibold">Variants and branch inventory</h3>
+          <h3 className="font-semibold">Versions and branch inventory</h3>
         </div>
         <div className="mt-3 space-y-4">
           {product.variants.length ? product.variants.map((variant) => (
-            <VariantInventory key={variant.id} variant={variant} onSaved={onSaved} />
+            <VariantInventory
+              key={variant.id}
+              variant={variant}
+              options={options}
+              onSaved={onSaved}
+            />
           )) : (
             <p className="rounded-2xl bg-[#f6f7f9] p-4 text-xs leading-5 text-black/50">
               No variant inventory has been configured yet.
@@ -489,63 +612,34 @@ function ProductDetail({
       <button
         type="button"
         disabled={saving}
-        onClick={() => void updateProduct(
-          product.active ? {} : { isActive: true },
-          product.active ? "DELETE" : "PATCH",
-        )}
+        onClick={() => void toggleFeatured()}
         className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-black/10 text-sm font-semibold disabled:opacity-50"
+      >
+        <Star size={16} className={product.featured ? "fill-amber-400 text-amber-400" : ""} />
+        {product.featured ? "Remove from homepage" : "Feature on homepage"}
+      </button>
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => void archiveOrRestore()}
+        className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-black/10 text-sm font-semibold disabled:opacity-50"
       >
         {product.active ? <Archive size={16} /> : <RotateCcw size={16} />}
         {product.active ? "Archive product" : "Restore product"}
       </button>
+      {/* Delete is refused server-side once the product has sold or been
+          ordered from a supplier — this button is for test rows and typos. */}
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => void deleteForever()}
+        className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-red-200 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+      >
+        <Trash2 size={16} />
+        Delete permanently
+      </button>
       {message && <p role="status" className="mt-3 text-center text-xs text-black/55">{message}</p>}
     </aside>
-  );
-}
-
-function ProductEditForm({
-  product,
-  saving,
-  onSubmit,
-}: {
-  product: AdminProduct;
-  saving: boolean;
-  onSubmit: (patch: ApiRecord) => void;
-}) {
-  return (
-    <form
-      className="mt-5 space-y-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        onSubmit({
-          name: text(data.get("name")),
-          description: text(data.get("description")),
-          category: text(data.get("category")),
-          ageRange: text(data.get("ageRange")),
-          gender: text(data.get("gender")),
-          sku: text(data.get("sku")) || undefined,
-          price: number(data.get("price")),
-          imageUrl: product.imageUrl,
-        });
-      }}
-    >
-      <EditorField label="Name" name="name" defaultValue={product.name} required />
-      <div className="grid grid-cols-2 gap-3">
-        <EditorField label="Category" name="category" defaultValue={product.category} required />
-        <EditorField label="SKU" name="sku" defaultValue={product.sku} />
-        <EditorField label="Age range" name="ageRange" defaultValue={product.ageRange} required />
-        <EditorField label="Gender" name="gender" defaultValue={product.gender} required />
-      </div>
-      <EditorField label="Price (GH₵)" name="price" type="number" min="0" step="0.01" defaultValue={String(product.price)} required />
-      <label className="block text-xs font-semibold text-black/50">
-        Description
-        <textarea name="description" defaultValue={product.description} rows={3} className="mt-1.5 w-full rounded-2xl border border-black/10 px-3 py-2.5 text-sm font-normal outline-none focus:border-black/35" />
-      </label>
-      <button type="submit" disabled={saving} className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#101820] text-sm font-semibold text-white disabled:opacity-50">
-        <Save size={16} /> {saving ? "Saving…" : "Save product"}
-      </button>
-    </form>
   );
 }
 
@@ -565,21 +659,49 @@ function EditorField({
   );
 }
 
+/**
+ * The read-only summary in the aside.
+ *
+ * Chips rather than `variant.title`, because `title` is whatever was written
+ * when the row was created and older ones carry the entire product name — the
+ * exact string that used to render as an unreadable size chip on the
+ * storefront. The chips are built from the option values instead, in the order
+ * the product declares its options.
+ */
 function VariantInventory({
   variant,
+  options,
   onSaved,
 }: {
   variant: AdminProductVariant;
+  options: readonly ProductOption[];
   onSaved: () => Promise<void>;
 }) {
+  const values = variantOptionValues(variant);
+  const keys = options.length > 0 ? options.map((option) => optionKey(option.name)) : Object.keys(values);
+  const chips = keys.map((key) => values[key]).filter(Boolean);
+
   return (
     <section className="rounded-2xl bg-[#f6f7f9] p-3">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <strong className="block text-sm">{variant.title}</strong>
-          <small className="text-[11px] text-black/45">{variant.sku}</small>
+        <div className="min-w-0">
+          {chips.length > 0 ? (
+            <span className="flex flex-wrap gap-1.5">
+              {chips.map((value) => (
+                <span key={value} className="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold">
+                  {value}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <strong className="block text-sm">Only version</strong>
+          )}
+          <small className="mt-1 block text-[11px] text-black/45">
+            {variant.sku} · {formatCedis(variant.price)}
+            {variant.active ? "" : " · switched off"}
+          </small>
         </div>
-        {variant.isDefault && <CircleCheck size={16} className="text-emerald-600" aria-label="Default variant" />}
+        {variant.isDefault && <CircleCheck size={16} className="text-emerald-600" aria-label="Shown first" />}
       </div>
       <div className="mt-3 space-y-2">
         {variant.inventory.map((level) => (
@@ -608,7 +730,7 @@ function InventoryLevel({
           <strong className="block truncate text-xs">{level.shopName}</strong>
           <small className="block truncate text-[10px] text-black/40">{level.shopLocation}</small>
         </span>
-        <button type="button" onClick={() => setEditing((current) => !current)} className="text-xs font-semibold text-[#28637d]">
+        <button type="button" onClick={() => setEditing((current) => !current)} className="min-h-11 text-xs font-semibold text-[#28637d]">
           {editing ? "Cancel" : "Adjust"}
         </button>
       </div>
@@ -672,7 +794,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 function LoadingState() {
   return (
-    <div aria-label="Loading products" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
+    <div aria-label="Loading products" className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
       <div className="h-[32rem] animate-pulse rounded-3xl bg-black/5" />
       <div className="h-[28rem] animate-pulse rounded-3xl bg-black/5" />
     </div>

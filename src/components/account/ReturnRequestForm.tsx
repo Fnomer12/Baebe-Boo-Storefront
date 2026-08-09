@@ -46,9 +46,9 @@ export default function ReturnRequestForm({ orders }: { orders: ReturnEligibleOr
     }
   }
 
-  if (!orders.length) return <p className="mt-8 rounded-3xl bg-[#f8f5f0] p-6 text-sm text-black/55">Delivered, paid orders that are eligible for a return will appear here.</p>;
+  if (!orders.length) return <p className="mt-8 rounded-3xl bg-[var(--color-cream)] p-6 text-sm text-black/55">Delivered, paid orders that are eligible for a return will appear here.</p>;
 
-  const inputClass = "mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:border-sky-500";
+  const inputClass = "mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:border-[var(--color-brand)]";
   return (
     <form onSubmit={submit} className="mt-9 rounded-3xl border border-black/10 p-5 sm:p-6">
       <h2 className="text-xl font-semibold">Request a return</h2>
@@ -60,7 +60,7 @@ export default function ReturnRequestForm({ orders }: { orders: ReturnEligibleOr
       </label>
       <fieldset className="mt-5 space-y-3"><legend className="text-xs font-semibold">Items and quantities</legend>
         {order?.items.map((item) => (
-          <label key={item.id} className="flex items-center justify-between gap-4 rounded-2xl bg-[#f8f5f0] p-4 text-sm">
+          <label key={item.id} className="flex items-center justify-between gap-4 rounded-2xl bg-[var(--color-cream)] p-4 text-sm">
             <span>{item.productName} <span className="text-black/40">(bought {item.quantity})</span></span>
             <input aria-label={`Return quantity for ${item.productName}`} type="number" min={0} max={item.quantity} value={quantities[item.id] || 0} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: Number(event.target.value) }))} className="w-20 rounded-xl border border-black/10 px-3 py-2" />
           </label>

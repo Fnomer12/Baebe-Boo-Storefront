@@ -69,6 +69,68 @@ export const verifiedReviewSchema = z.object({
   body: z.string().trim().min(20).max(2_000),
 });
 
+export const profileMutationSchema = z.object({
+  fullName: optionalTrimmedText(160),
+  phone: optionalTrimmedText(20).transform((value, context) => {
+    if (!value) return undefined;
+    if (!/^\+?[0-9 ()-]{7,20}$/.test(value)) {
+      context.addIssue({
+        code: "custom",
+        message: "Enter a valid phone number.",
+      });
+      return z.NEVER;
+    }
+    return value;
+  }),
+  dateOfBirth: optionalTrimmedText(10).transform((value, context) => {
+    if (!value) return undefined;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      context.addIssue({ code: "custom", message: "Enter a valid date." });
+      return z.NEVER;
+    }
+    return value;
+  }),
+  marketingStatus: z.enum(["unknown", "subscribed", "unsubscribed"]).default("unknown"),
+});
+
+export const childMutationSchema = z.object({
+  firstName: optionalTrimmedText(100),
+  dateOfBirth: optionalTrimmedText(10).transform((value, context) => {
+    if (!value) return undefined;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      context.addIssue({ code: "custom", message: "Enter a valid date." });
+      return z.NEVER;
+    }
+    return value;
+  }),
+  ageRangeTaxonomyId: z.uuid().optional(),
+});
+
+export const registryMutationSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  eventDate: optionalTrimmedText(10).transform((value, context) => {
+    if (!value) return undefined;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      context.addIssue({ code: "custom", message: "Enter a valid date." });
+      return z.NEVER;
+    }
+    return value;
+  }),
+  status: z.enum(["draft", "active", "closed"]).default("active"),
+});
+
+export const registryItemSchema = z.object({
+  registryId: z.uuid(),
+  productId: z.uuid(),
+  variantId: z.uuid().optional(),
+  requestedQuantity: z.number().int().min(1).max(100).default(1),
+  priority: z.enum(["low", "normal", "high"]).default("normal"),
+});
+
 export type AddressMutation = z.infer<typeof addressMutationSchema>;
 export type ReturnRequestMutation = z.infer<typeof returnRequestSchema>;
 export type VerifiedReviewMutation = z.infer<typeof verifiedReviewSchema>;
+export type ProfileMutation = z.infer<typeof profileMutationSchema>;
+export type ChildMutation = z.infer<typeof childMutationSchema>;
+export type RegistryMutation = z.infer<typeof registryMutationSchema>;
+export type RegistryItemMutation = z.infer<typeof registryItemSchema>;

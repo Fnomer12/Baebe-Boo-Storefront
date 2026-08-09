@@ -25,3 +25,29 @@ export function calculateRedemption({
 
   return { pointsUsed, credit: pointsUsed / POINTS_PER_CEDI };
 }
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export type LoyaltyEventType = "purchase" | "referral" | "review" | "birthday" | "social_share";
+
+export async function creditLoyaltyPoints(
+  supabase: Pick<SupabaseClient, "rpc">,
+  input: {
+    userId: string;
+    eventType: LoyaltyEventType;
+    sourceKey: string;
+    reason: string;
+    orderId?: string | null;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  const { error } = await supabase.rpc("credit_loyalty_points", {
+    p_user_id: input.userId,
+    p_event_type: input.eventType,
+    p_source_key: input.sourceKey,
+    p_reason: input.reason,
+    p_order_id: input.orderId || null,
+    p_metadata: input.metadata || {},
+  });
+  return { error };
+}

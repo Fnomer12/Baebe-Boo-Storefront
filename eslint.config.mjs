@@ -10,9 +10,12 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    ".next-static-archive/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone screenshot utility; not part of the Next.js app bundle.
+    "screenshots/capture.js",
   ]),
   {
     plugins: { "react-hooks": reactHooks },

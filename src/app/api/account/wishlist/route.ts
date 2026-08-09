@@ -35,16 +35,21 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ message: "Invalid wishlist item." }, { status: 400 });
 
   const { supabase, userId } = authorization;
-  let { data: wishlist, error } = await supabase
+  // Any wishlist the user owns, oldest first. Matching on a hardcoded name
+  // broke against rows created with the column's default ('Wishlist') and
+  // quietly spawned duplicates — there is no unique constraint to stop that.
+  const found = await supabase
     .from("wishlists")
     .select("id")
     .eq("user_id", userId)
-    .eq("name", "My wishlist")
-    .maybeSingle();
+    .order("created_at", { ascending: true })
+    .limit(1);
+  let wishlist = found.data?.[0] ?? null;
+  let error = found.error;
   if (!wishlist && !error && parsed.data.active) {
     const created = await supabase
       .from("wishlists")
-      .insert({ user_id: userId, name: "My wishlist", is_public: false })
+      .insert({ user_id: userId, is_public: false })
       .select("id")
       .single();
     wishlist = created.data;

@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // pdfkit reads its base-14 font metrics with
+  // `fs.readFileSync(__dirname + '/data/Helvetica.afm')`. Webpack rewrites
+  // `__dirname` and never emits those .afm files, so any code path touching a
+  // standard font would throw ENOENT at runtime — inside a payment handler.
+  // The receipt avoids that path by embedding its own fonts, but externalizing
+  // removes the whole class of failure rather than relying on nobody ever
+  // typing `doc.font("Helvetica")`.
+  serverExternalPackages: ["nodemailer", "pdfkit"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "*.supabase.co" },
@@ -38,6 +46,19 @@ const nextConfig: NextConfig = {
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           { key: "Cross-Origin-Resource-Policy", value: "same-site" },
         ],
+      },
+      {
+        // The logo every transactional email points at. Next serves `public/`
+        // with `max-age=0`, so without this Gmail's image proxy re-fetches it
+        // on essentially every open.
+        //
+        // Deliberately not `immutable`: the filename is stable, so the way to
+        // ship new artwork is to RENAME the file (`logo-email-2.png`) and
+        // update the one reference in `src/lib/email/templates.ts`. This rule
+        // sets only `Cache-Control`, which the catch-all above does not, so the
+        // two are additive rather than conflicting.
+        source: "/logo-email.png",
+        headers: [{ key: "Cache-Control", value: "public, max-age=2592000" }],
       },
     ];
   },

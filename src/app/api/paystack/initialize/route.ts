@@ -16,6 +16,27 @@ function errorResponse(message: string, status = 400) {
   return NextResponse.json({ status: false, message }, { status });
 }
 
+/**
+ * The charged delivery fee split across shipments, to the pesewa.
+ *
+ * `fulfilment_allocations.delivery_fee` is numeric(12,2) and the customer's
+ * receipt is these rows added up, so a plain `fee / shipments` on GH₵25 over
+ * three branches stores 8.33 three times and leaves the receipt a pesewa short
+ * of what was actually paid. The odd pesewas go to the first shipments.
+ */
+// Not exported: a route module may only export HTTP methods and segment
+// config, so this is covered through the handler in route.test.ts.
+function splitDeliveryFee(fee: number, shipments: number): number[] {
+  if (shipments <= 0) return [];
+  const pesewas = Number.isFinite(fee) ? Math.max(0, Math.round(fee * 100)) : 0;
+  const share = Math.floor(pesewas / shipments);
+  const remainder = pesewas - share * shipments;
+  return Array.from(
+    { length: shipments },
+    (_, index) => (share + (index < remainder ? 1 : 0)) / 100,
+  );
+}
+
 export async function POST(req: Request) {
   let orderId: string | null = null;
   let reservationId: string | null = null;
@@ -30,7 +51,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { email, name, phone, deliveryAddress, shopId, preferredShopId, items, deliveryZoneId, fulfilmentType, promotionCode } = body as {
+    const { email, name, phone, deliveryAddress, shopId, preferredShopId, items, deliveryZoneId, fulfilmentType, promotionCode, voucherCode } = body as {
       email?: unknown;
       name?: unknown;
       phone?: unknown;
@@ -41,6 +62,7 @@ export async function POST(req: Request) {
       deliveryZoneId?: unknown;
       fulfilmentType?: unknown;
       promotionCode?: unknown;
+      voucherCode?: unknown;
     };
 
     const chosenFulfilment = fulfilmentType === "pickup" ? "pickup" : "delivery";
@@ -57,13 +79,22 @@ export async function POST(req: Request) {
       (chosenFulfilment === "pickup" && typeof shopId !== "string") ||
       (shopId !== undefined && shopId !== null && typeof shopId !== "string") ||
       (preferredShopId !== undefined && preferredShopId !== null && typeof preferredShopId !== "string") ||
-      (promotionCode !== undefined && promotionCode !== null && typeof promotionCode !== "string")
+      (promotionCode !== undefined && promotionCode !== null && typeof promotionCode !== "string") ||
+      (voucherCode !== undefined && voucherCode !== null && typeof voucherCode !== "string")
     ) {
       return errorResponse("Invalid checkout details.");
     }
 
     if (!isSupabaseAdminConfigured) {
       return errorResponse("Checkout is temporarily unavailable.", 503);
+    }
+
+    // Checked before anything is written. `requireServerEnv` throws, and it is
+    // only reached after the order row exists and stock is reserved — so an
+    // unconfigured key produced a junk payment_failed order on every attempt
+    // instead of a clean refusal.
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return errorResponse("Card payment is temporarily unavailable.", 503);
     }
 
     const basket = await resolveCheckoutBasket({
@@ -86,10 +117,14 @@ export async function POST(req: Request) {
       productIds,
       deliveryFee,
       promotionCode: typeof promotionCode === "string" ? promotionCode : null,
+      voucherCode: typeof voucherCode === "string" ? voucherCode : null,
       customerUserId: authData?.user?.id || null,
     });
     if (typeof promotionCode === "string" && promotionCode.trim() && !promotionQuote.promotionCodeValid) {
       return errorResponse(promotionQuote.promotionMessage || "That promotion code is not valid.");
+    }
+    if (typeof voucherCode === "string" && voucherCode.trim() && !promotionQuote.voucherCodeValid) {
+      return errorResponse(promotionQuote.voucherMessage || "That gift voucher code is not valid.");
     }
     const total = promotionQuote.total;
     const amountInPesewas = Math.round(total * 100);
@@ -108,6 +143,8 @@ export async function POST(req: Request) {
         delivery_address: chosenFulfilment === "delivery" ? deliveryAddress.trim() : "Click-and-collect",
         shop_id: primaryShopId,
         total_amount: total,
+        voucher_code: typeof voucherCode === "string" && voucherCode.trim() ? voucherCode.trim() : null,
+        voucher_credit: promotionQuote.voucherCredit || 0,
         order_status: "pending_payment",
         payment_method: "paystack",
         payment_status: "pending",
@@ -122,12 +159,26 @@ export async function POST(req: Request) {
     const { data: insertedItems, error: itemError } = await supabaseAdmin
       .from("order_items")
       .insert(
+        // `unit_price` and `total_price` are NOT NULL with no default on the
+        // legacy order_items table. Omitting them made every single online
+        // order fail here: the order row was created, this insert threw, and
+        // the catch below marked the order payment_failed. Production has zero
+        // order_items rows as a result.
+        //
+        // `price` and `cost_price` are what report_top_brands and
+        // report_daily_profit read, so an order missing them reports zero brand
+        // revenue and a 100% margin. Captured here, at the price actually
+        // charged, rather than read back from the variant later.
         selectedVariants.map((variant) => ({
           order_id: order.id,
           product_id: variant.productId,
           variant_id: variant.id,
           product_name: productById.get(variant.productId)?.name || "Product",
           quantity: variant.quantity,
+          unit_price: variant.price,
+          total_price: Math.round(variant.price * variant.quantity * 100) / 100,
+          price: variant.price,
+          cost_price: variant.costPrice,
         })),
       )
       .select("id, product_id, variant_id");
@@ -184,7 +235,16 @@ export async function POST(req: Request) {
     if (reservationError || !reservation) throw new Error("Could not reserve inventory.");
     reservationId = reservation;
 
-    for (const branch of allocation.allocations) {
+    // THE BUG: this used the basket's un-discounted `deliveryFee`, so a
+    // free-delivery promotion zeroed the fee in the quote and in
+    // `orders.total_amount` while the shipment rows still claimed the full
+    // fee — and the customer's receipt, which adds these rows up, did not
+    // match what they were charged. `promotionQuote.deliveryFee` is the fee
+    // actually billed.
+    const chargedDeliveryFee = chosenFulfilment === "delivery" ? promotionQuote.deliveryFee : 0;
+    const deliveryFeeShares = splitDeliveryFee(chargedDeliveryFee, allocation.allocations.length);
+
+    for (const [index, branch] of allocation.allocations.entries()) {
       const { data: fulfilment, error: fulfilmentError } = await supabaseAdmin
         .from("fulfilment_allocations")
         .insert({
@@ -192,7 +252,7 @@ export async function POST(req: Request) {
           shop_id: branch.branchId,
           fulfilment_type: chosenFulfilment,
           status: "allocated",
-          delivery_fee: chosenFulfilment === "delivery" ? deliveryFee / allocation.allocations.length : 0,
+          delivery_fee: deliveryFeeShares[index],
         })
         .select("id")
         .single();
@@ -229,13 +289,15 @@ export async function POST(req: Request) {
       await supabaseAdmin.from("orders").update({ order_status: "payment_failed", payment_status: "failed" }).eq("id", order.id);
       return errorResponse(data?.message || "Payment initialization failed.", 502);
     }
+    const reference: string = data.data.reference;
+    const accessCode: string = data.data.access_code;
 
     await Promise.all([
-      supabaseAdmin.from("orders").update({ payment_reference: data.data.reference }).eq("id", order.id),
+      supabaseAdmin.from("orders").update({ payment_reference: reference }).eq("id", order.id),
       supabaseAdmin.from("payment_attempts").insert({
         order_id: order.id,
         provider: "paystack",
-        provider_reference: data.data.reference,
+        provider_reference: reference,
         amount: total,
         currency: "GHS",
         status: "initialized",
@@ -245,13 +307,13 @@ export async function POST(req: Request) {
     return NextResponse.json({
       status: true,
       data: {
-        access_code: data.data.access_code,
-        reference: data.data.reference,
+        access_code: accessCode,
+        reference,
         order_id: order.id,
         order_number: order.order_number,
         split: allocation.split,
         shipment_count: allocation.allocations.length,
-        delivery_fee: deliveryFee,
+        delivery_fee: promotionQuote.deliveryFee,
         discount: promotionQuote.discount,
         total: promotionQuote.total,
         promotion_message: promotionQuote.promotionMessage,
@@ -268,6 +330,14 @@ export async function POST(req: Request) {
     if (error instanceof CheckoutResolutionError) {
       return errorResponse(error.message, error.status);
     }
+    // The customer still gets a generic message — the cause of a failed payment
+    // must not leak to the browser. But it has to reach the server logs, or a
+    // checkout that 500s is undiagnosable in production.
+    console.error("[paystack/initialize] failed", {
+      orderId,
+      reservationId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return errorResponse("Payment initialization failed.", 500);
   }
 }

@@ -3,88 +3,57 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import { whatsappUrl } from "@/lib/public-contact";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import {
   Menu,
-  SlidersHorizontal,
   ShoppingBag,
   X,
-  Baby,
-  Crown,
-  Rainbow,
-  Shirt,
-  Footprints,
-  Sprout,
-  ToyBrick,
-  Milk,
-  Gift,
-  Bed,
-  School,
-  Heart,
   Home,
   Store,
-  MessageCircle,
   Truck,
+  Search,
+  UserRound,
+  BookOpen,
+  MapPin,
+  Info,
+  LogOut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-
-const genders = [
-  { name: "All", icon: ToyBrick },
-  { name: "Boys", icon: Baby },
-  { name: "Girls", icon: Crown },
-  { name: "Unisex", icon: Rainbow },
-];
-
-const categories = [
-  { name: "All Categories", icon: ToyBrick },
-  { name: "Baby Clothing", icon: Shirt },
-  { name: "Baby Shoes", icon: Footprints },
-  { name: "Feeding", icon: Milk },
-  { name: "Toys", icon: ToyBrick },
-  { name: "School Essentials", icon: School },
-  { name: "Nursery", icon: Bed },
-  { name: "Gift Sets", icon: Gift },
-  { name: "Maternity", icon: Heart },
-  { name: "Accessories", icon: Sprout },
-];
-
-const ages = [
-  "All Ages",
-  "0–3 Months",
-  "3–6 Months",
-  "6–12 Months",
-  "1–2 Years",
-  "2–4 Years",
-  "4–6 Years",
-  "6+ Years",
-];
-
-type FilterValues = {
-  gender: string;
-  category: string;
-  age: string;
-};
+import InstantSearch from "@/components/storefront/InstantSearch";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 type NavbarProps = {
   cartCount?: number;
-  onFilterChange?: (filters: FilterValues) => void;
 };
 
-export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
-  const pathname = usePathname();
-  const showFilters = pathname === "/store";
+type AccountSummary = {
+  name: string;
+  email: string;
+};
+
+function accountFromUser(user: User | null): AccountSummary | null {
+  if (!user) return null;
+  const fullName = (user.user_metadata as { full_name?: unknown } | null)?.full_name;
+  return {
+    name: typeof fullName === "string" && fullName.trim() ? fullName : user.email || "My account",
+    email: user.email || "",
+  };
+}
+
+export default function Navbar({ cartCount = 0 }: NavbarProps) {
+  const router = useRouter();
 
   const [liveCartCount, setLiveCartCount] = useState(cartCount);
   const [cartMessage, setCartMessage] = useState("");
 
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
-  const [selectedGender, setSelectedGender] = useState("All");
-  const [selectedCategory, setSelectedCategory] = useState("All Categories");
-  const [selectedAge, setSelectedAge] = useState("All Ages");
+  const [account, setAccount] = useState<AccountSummary | null>(null);
 
   useEffect(() => {
     const updateCartCount = () => {
@@ -130,9 +99,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
 
     window.addEventListener("baebe_cart_message", showMessage);
 
-    return () => {
-      window.removeEventListener("baebe_cart_message", showMessage);
-    };
+    return () => window.removeEventListener("baebe_cart_message", showMessage);
   }, []);
 
   useEffect(() => {
@@ -147,49 +114,55 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
   }, []);
 
   useEffect(() => {
-    if (!menuOpen && !filtersOpen) return;
+    if (!menuOpen && !searchOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMenuOpen(false);
-        setFiltersOpen(false);
+        setSearchOpen(false);
       }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [filtersOpen, menuOpen]);
+  }, [menuOpen, searchOpen]);
 
-  const applyFilters = () => {
-    onFilterChange?.({
-      gender: selectedGender,
-      category: selectedCategory,
-      age: selectedAge,
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let active = true;
+
+    void supabase.auth.getUser().then(({ data }) => {
+      if (active) setAccount(accountFromUser(data.user));
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAccount(accountFromUser(session?.user ?? null));
     });
 
-    setFiltersOpen(false);
-  };
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
-  const clearFilters = () => {
-    setSelectedGender("All");
-    setSelectedCategory("All Categories");
-    setSelectedAge("All Ages");
-
-    onFilterChange?.({
-      gender: "All",
-      category: "All Categories",
-      age: "All Ages",
-    });
-
-    setFiltersOpen(false);
-  };
+  async function signOut() {
+    await supabase.auth.signOut();
+    setMenuOpen(false);
+    router.refresh();
+  }
 
   return (
     <>
-      <header className="fixed left-0 top-0 z-50 w-full px-2 pt-2 sm:px-3 sm:pt-3 md:px-4 md:pt-4">
+      {/* The pill is inset, so page content used to scroll visibly through the
+          gutters above and beside it — headings collided with the bar and read
+          as a rendering fault. This blurred band sits behind the pill and
+          fades out below it, masking that content without painting a hard
+          edge over the body's gradient canvas. */}
+      <header className="fixed left-0 top-0 z-50 w-full px-2 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:-z-10 before:h-[calc(100%+0.75rem)] before:backdrop-blur-md before:[mask-image:linear-gradient(to_bottom,black_60%,transparent)] sm:px-3 sm:pt-3 md:px-4 md:pt-4">
         <div
-          className={`mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/70 bg-white/90 shadow-lg shadow-black/5 transition-all duration-500 ${
+          className={`mx-auto flex min-w-0 max-w-7xl items-center justify-between rounded-full border border-white/70 bg-white/90 shadow-lg shadow-black/5 transition-all duration-500 ${
             minimized
               ? "h-14 px-2 sm:px-3 md:h-16 md:px-4"
-              : "h-16 px-2 sm:h-[72px] sm:px-3 md:h-24 md:px-5"
+              : "h-16 px-2 sm:h-[72px] sm:px-3 md:h-20 md:px-5"
           }`}
         >
           <Link
@@ -199,8 +172,8 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
             <div
               className={`relative shrink-0 overflow-hidden rounded-full border border-white/60 bg-white shadow-sm transition-all duration-500 ${
                 minimized
-                  ? "h-10 w-10 md:h-11 md:w-11"
-                  : "h-11 w-11 sm:h-12 sm:w-12 md:h-16 md:w-16"
+                ? "h-10 w-10 md:h-11 md:w-11"
+                  : "h-11 w-11 sm:h-12 sm:w-12 md:h-14 md:w-14"
               }`}
             >
               <Image
@@ -212,68 +185,40 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
               />
             </div>
 
-            <div
-              className={`min-w-0 [perspective:1200px] transition-all duration-500 ${
+            <span
+              className={`min-w-0 truncate whitespace-nowrap font-extrabold tracking-tight text-black transition-all duration-500 ${
                 minimized
-                  ? "h-10 w-[115px] sm:w-[150px] md:h-12 md:w-[190px]"
-                  : "h-11 w-[135px] sm:h-12 sm:w-[180px] md:h-16 md:w-[260px]"
+                  ? "text-[1.35rem] sm:text-3xl md:text-3xl"
+                  : "text-[1.55rem] sm:text-4xl md:text-4xl"
               }`}
             >
-              <div
-                className="relative h-full w-full [transform-style:preserve-3d]"
-              >
-                <div className="absolute inset-0 flex items-center overflow-hidden [backface-visibility:hidden]">
-                  <span
-                    className={`truncate whitespace-nowrap [font-family:Georgia,serif] font-semibold tracking-tight text-black transition-all duration-500 ${
-                      minimized
-                        ? "text-[1.45rem] sm:text-3xl md:text-4xl"
-                        : "text-[1.7rem] sm:text-4xl md:text-5xl"
-                    }`}
-                  >
-                    Baebe Boo
-                  </span>
-                </div>
-
-                <div className="absolute inset-0 flex items-center overflow-hidden [transform:rotateX(180deg)] [backface-visibility:hidden]">
-                  <span
-                    className={`truncate whitespace-nowrap [font-family:Georgia,serif] font-semibold tracking-tight text-black transition-all duration-500 ${
-                      minimized
-                        ? "text-[1.45rem] sm:text-3xl md:text-4xl"
-                        : "text-[1.7rem] sm:text-4xl md:text-5xl"
-                    }`}
-                  >
-                    Storefront
-                  </span>
-                </div>
-              </div>
-            </div>
+              Baebe Boo
+            </span>
           </Link>
 
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-3">
+          <nav aria-label="Primary navigation" className="hidden min-w-0 flex-1 items-center justify-center gap-4 lg:flex xl:gap-5">
+            <Link href="/category/baby-clothing" className="text-xs font-semibold text-black/75 transition hover:text-black">Baby</Link>
+            <Link href="/category/toys" className="text-xs font-semibold text-black/75 transition hover:text-black">Toddler & Kids</Link>
+            <Link href="/category/gift-sets" className="text-xs font-semibold text-black/75 transition hover:text-black">Gifts</Link>
+            <Link href="/category/clearance" className="text-xs font-semibold text-[#9b5548] transition hover:text-black">Deals</Link>
+          </nav>
+
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-2.5">
+            <button type="button" onClick={() => setSearchOpen(true)} aria-label="Search products" className="hidden h-10 w-10 items-center justify-center rounded-full bg-white/80 text-black shadow-sm backdrop-blur-xl transition hover:scale-105 hover:bg-white lg:flex">
+              <Search size={18} />
+            </button>
+            <Link href="/account" prefetch={false} aria-label="My account" className="hidden h-10 w-10 items-center justify-center rounded-full bg-white/80 text-black shadow-sm backdrop-blur-xl transition hover:scale-105 hover:bg-white lg:flex">
+              <UserRound size={18} />
+            </Link>
             <Link
               href="/store"
               prefetch={false}
-              className={`hidden items-center rounded-full bg-white/80 px-4 text-xs font-semibold text-black shadow-sm backdrop-blur-xl transition hover:scale-105 hover:bg-white sm:flex md:px-5 md:text-sm ${
+              className={`hidden items-center rounded-full bg-white/80 px-4 text-xs font-semibold text-black shadow-sm backdrop-blur-xl transition hover:scale-105 hover:bg-white lg:flex md:px-5 md:text-sm ${
                 minimized ? "h-9 md:h-10" : "h-10 md:h-12"
               }`}
             >
               Store
             </Link>
-
-            {showFilters && (
-              <button
-                onClick={() => setFiltersOpen(true)}
-                aria-label="Open product filters"
-                className={`flex items-center justify-center gap-2 rounded-full bg-[#DDF2FF]/95 px-3 text-black shadow-sm backdrop-blur-xl transition hover:scale-105 md:px-4 ${
-                  minimized ? "h-9" : "h-10 md:h-12"
-                }`}
-              >
-                <SlidersHorizontal size={19} />
-                <span className="hidden text-xs font-semibold md:inline md:text-sm">
-                  Filter
-                </span>
-              </button>
-            )}
 
             <Link
               href="/cart"
@@ -281,8 +226,8 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
               aria-label={`Cart, ${liveCartCount} items`}
               className={`relative flex shrink-0 items-center justify-center overflow-visible rounded-full bg-black text-white shadow-sm transition-all duration-300 hover:scale-105 hover:bg-neutral-900 ${
                 minimized
-                  ? "h-10 w-12 md:h-11 md:w-14"
-                  : "h-11 w-14 md:h-12 md:w-16"
+                  ? "h-10 w-12 md:h-11 md:w-12"
+                  : "h-11 w-12 md:h-11 md:w-12"
               }`}
             >
               <ShoppingBag
@@ -291,16 +236,21 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
                 className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-white"
               />
 
-              <span className="absolute -right-1 -top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#FFEAF2] text-[11px] font-bold leading-none text-black shadow-md">
-                {liveCartCount}
-              </span>
+              {liveCartCount > 0 && (
+                <span className="absolute -right-1 -top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#FFEAF2] text-[11px] font-bold leading-none text-black shadow-md">
+                  {liveCartCount}
+                </span>
+              )}
             </Link>
 
             <button
+              type="button"
               onClick={() => setMenuOpen(true)}
               aria-label="Open menu"
+              aria-expanded={menuOpen}
+              aria-controls="site-menu"
               className={`flex items-center justify-center rounded-full bg-white/80 px-3 text-black shadow-sm backdrop-blur-xl transition hover:scale-105 hover:bg-white md:px-4 ${
-                minimized ? "h-10 md:h-11" : "h-11 md:h-12"
+                minimized ? "h-10 w-10 md:h-11 md:w-11" : "h-11 w-11 md:h-11 md:w-11"
               }`}
             >
               <Menu size={22} />
@@ -308,6 +258,14 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
           </div>
         </div>
       </header>
+
+      {searchOpen && (
+        <div className="storefront-search-overlay" role="dialog" aria-modal="true" aria-label="Search products" onClick={() => setSearchOpen(false)}>
+          <div className="storefront-search-overlay-sheet" onClick={(event) => event.stopPropagation()}>
+            <InstantSearch variant="overlay" autoFocus onNavigate={() => setSearchOpen(false)} />
+          </div>
+        </div>
+      )}
 
       {cartMessage && (
         <div className="fixed left-1/2 top-20 z-[90] w-[92%] max-w-md -translate-x-1/2 rounded-3xl bg-black px-5 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-24 sm:rounded-full">
@@ -323,6 +281,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
       )}
 
       <aside
+        id="site-menu"
         aria-hidden={!menuOpen}
         inert={!menuOpen ? true : undefined}
         className={`fixed right-0 top-0 z-[80] h-dvh w-full max-w-[390px] overflow-y-auto bg-[#FDFBF8] shadow-2xl transition-transform duration-500 sm:w-[90%] ${
@@ -336,6 +295,7 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
           </div>
 
           <button
+            type="button"
             onClick={() => setMenuOpen(false)}
             aria-label="Close menu"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white"
@@ -344,188 +304,120 @@ export default function Navbar({ cartCount = 0, onFilterChange }: NavbarProps) {
           </button>
         </div>
 
-        <div className="space-y-3 px-5 py-6 sm:px-6">
-          <MenuLink
-            href="/"
-            icon={Home}
-            label="Home"
-            close={() => setMenuOpen(false)}
-          />
+        <div className="space-y-8 px-5 py-6 sm:px-6">
+          <section>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-black/50">
+              Shop
+            </h3>
+            <div className="space-y-3">
+              <MenuLink
+                href="/"
+                icon={Home}
+                label="Home"
+                close={() => setMenuOpen(false)}
+              />
 
-          <MenuLink
-            href="/store"
-            icon={Store}
-            label="Store"
-            close={() => setMenuOpen(false)}
-          />
+              <MenuLink
+                href="/store"
+                icon={Store}
+                label="Store"
+                close={() => setMenuOpen(false)}
+              />
 
-          <MenuLink
-            href="/cart"
-            icon={ShoppingBag}
-            label="Cart"
-            close={() => setMenuOpen(false)}
-          />
+              <MenuLink
+                href="/cart"
+                icon={ShoppingBag}
+                label="Cart"
+                close={() => setMenuOpen(false)}
+              />
+            </div>
+          </section>
 
-          <MenuLink
-            href="/track-records"
-            icon={Truck}
-            label="Track Records"
-            close={() => setMenuOpen(false)}
-          />
+          <section>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-black/50">
+              Help &amp; discover
+            </h3>
+            <div className="space-y-3">
+              <MenuLink
+                href="/parenting"
+                icon={BookOpen}
+                label="Parenting Hub"
+                close={() => setMenuOpen(false)}
+              />
+
+              <MenuLink
+                href="/stores"
+                icon={MapPin}
+                label="Our Stores"
+                close={() => setMenuOpen(false)}
+              />
+
+              <MenuLink
+                href="/track-records"
+                icon={Truck}
+                label="Track order"
+                close={() => setMenuOpen(false)}
+              />
+
+              <MenuLink
+                href="/about"
+                icon={Info}
+                label="About"
+                close={() => setMenuOpen(false)}
+              />
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-black/50">
+              Account
+            </h3>
+            {account ? (
+              <div className="space-y-3">
+                <div className="rounded-2xl bg-white px-5 py-4 shadow-sm">
+                  <p className="truncate font-semibold text-black">{account.name}</p>
+                  {account.email && (
+                    <p className="truncate text-sm text-black/50">{account.email}</p>
+                  )}
+                </div>
+
+                <MenuLink
+                  href="/account"
+                  icon={UserRound}
+                  label="My account"
+                  close={() => setMenuOpen(false)}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-white px-5 py-4 font-semibold text-black shadow-sm transition hover:bg-[#F8F5F0]"
+                >
+                  <LogOut size={21} />
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <MenuLink
+                href="/account/login"
+                icon={UserRound}
+                label="Sign in or create an account"
+                close={() => setMenuOpen(false)}
+              />
+            )}
+          </section>
 
           <a
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-3 rounded-2xl bg-[#25D366] px-5 py-4 font-semibold text-white"
+            className="flex items-center gap-3 rounded-2xl bg-[#128C7E] px-5 py-4 font-semibold text-white"
           >
-            <MessageCircle size={21} />
+            <WhatsAppIcon size={20} />
             Chat on WhatsApp
           </a>
         </div>
       </aside>
-
-      {showFilters && filtersOpen && (
-        <div
-          onClick={() => setFiltersOpen(false)}
-          className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm"
-        />
-      )}
-
-      {showFilters && (
-        <aside
-          aria-hidden={!filtersOpen}
-          inert={!filtersOpen ? true : undefined}
-          className={`fixed right-0 top-0 z-[70] h-dvh w-full max-w-[430px] overflow-y-auto bg-[#FDFBF8] shadow-2xl transition-transform duration-500 sm:w-[90%] ${
-            filtersOpen ? "translate-x-0" : "translate-x-full"
-          }`}
-        >
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-[#FDFBF8]/95 px-5 py-5 backdrop-blur-xl md:px-6">
-            <div>
-              <h2 className="text-xl font-semibold text-black">Filters</h2>
-              <p className="text-sm text-black/50">
-                Find the perfect baby item
-              </p>
-            </div>
-
-            <button
-              onClick={() => setFiltersOpen(false)}
-              aria-label="Close product filters"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="space-y-8 px-5 py-6 md:px-6">
-            <div>
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-black/50">
-                Shop By
-              </h3>
-
-              <div className="grid grid-cols-2 gap-3">
-                {genders.map((item) => {
-                  const Icon = item.icon;
-                  const active = selectedGender === item.name;
-
-                  return (
-                    <button
-                      key={item.name}
-                      onClick={() => setSelectedGender(item.name)}
-                      className={`flex min-w-0 items-center gap-3 rounded-2xl border px-4 py-4 text-left transition ${
-                        active
-                          ? "border-black bg-[#DDF2FF] text-black"
-                          : "border-black/10 bg-white text-black/60"
-                      }`}
-                    >
-                      <Icon size={21} className="shrink-0" />
-                      <span className="truncate font-medium">{item.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-black/50">
-                Categories
-              </h3>
-
-              <div className="space-y-3">
-                {categories.map((item) => {
-                  const Icon = item.icon;
-                  const active = selectedCategory === item.name;
-
-                  return (
-                    <button
-                      key={item.name}
-                      onClick={() => setSelectedCategory(item.name)}
-                      className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-4 transition ${
-                        active
-                          ? "border-black bg-black text-white"
-                          : "border-black/10 bg-white text-black"
-                      }`}
-                    >
-                      <span className="flex min-w-0 items-center gap-3">
-                        <Icon size={21} className="shrink-0" />
-                        <span className="truncate font-medium">
-                          {item.name}
-                        </span>
-                      </span>
-
-                      {active && (
-                        <span className="shrink-0 text-xs">Selected</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-black/50">
-                Age Range
-              </h3>
-
-              <div className="flex flex-wrap gap-3">
-                {ages.map((age) => {
-                  const active = selectedAge === age;
-
-                  return (
-                    <button
-                      key={age}
-                      onClick={() => setSelectedAge(age)}
-                      className={`rounded-full border px-5 py-3 text-sm font-medium transition ${
-                        active
-                          ? "border-black bg-black text-white"
-                          : "border-black/10 bg-white text-black/60"
-                      }`}
-                    >
-                      {age}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="sticky bottom-0 grid grid-cols-2 gap-3 border-t border-black/10 bg-[#FDFBF8]/95 py-4 backdrop-blur-xl">
-              <button
-                onClick={clearFilters}
-                className="h-14 rounded-full border border-black/10 bg-white text-sm font-semibold text-black"
-              >
-                Clear
-              </button>
-
-              <button
-                onClick={applyFilters}
-                className="shimmer-hover h-14 rounded-full bg-black text-sm font-semibold text-white"
-              >
-                <span className="relative z-10 text-white">Apply Filters</span>
-              </button>
-            </div>
-          </div>
-        </aside>
-      )}
     </>
   );
 }

@@ -1,10 +1,5 @@
-import type { Metadata } from "next";
-import ProductManagement from "@/components/admin/ProductManagement";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Products | Baebe Boo Admin",
-};
-
-export default function AdminProductsPage() {
-  return <ProductManagement />;
+export default function AdminStoreRedirectPage() {
+  redirect("/BaebeAdmin/products");
 }

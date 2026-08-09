@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import StoreCatalog from "@/components/storefront/StoreCatalog";
 
 export const metadata: Metadata = {
-  title: "Shop baby & children essentials | Baebe Boo",
+  title: "Shop baby & children essentials",
   description: "Discover clothing, shoes, feeding, nursery, toys, school essentials and gifts for every stage.",
 };
 

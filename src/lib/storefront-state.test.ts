@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addProductToCart, recordRecentlyViewed, storefrontKeys, toggleProductList } from "./storefront-state";
+import { addProductToCart, compareProductIds, recordRecentlyViewed, storefrontKeys, toggleProductList } from "./storefront-state";
 import { fallbackProducts, fallbackShops } from "../components/storefront/catalog-data";
 
 describe("storefront persistence", () => {
@@ -31,5 +31,14 @@ describe("storefront persistence", () => {
     const viewed = JSON.parse(window.localStorage.getItem(storefrontKeys.recentlyViewed) || "[]") as string[];
     expect(viewed).toHaveLength(12);
     expect(viewed[0]).toBe("14");
+  });
+
+  it("reads back the compare shortlist in selection order", () => {
+    expect(compareProductIds()).toEqual([]);
+    toggleProductList(storefrontKeys.compare, "one", 4);
+    toggleProductList(storefrontKeys.compare, "two", 4);
+    expect(compareProductIds()).toEqual(["one", "two"]);
+    toggleProductList(storefrontKeys.compare, "one", 4);
+    expect(compareProductIds()).toEqual(["two"]);
   });
 });

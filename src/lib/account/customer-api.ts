@@ -15,13 +15,70 @@ type AuthorizedCustomerMutation =
     }
   | { authorized: false; response: NextResponse };
 
+const FALLBACK_SITE_HOST = "baebe-boo.jtechinnovations.tech";
+
+/** Host (including port when non-default) of the configured site URL. */
+function configuredSiteHost(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!raw) return FALLBACK_SITE_HOST;
+  try {
+    const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+    return new URL(candidate).host.toLowerCase() || FALLBACK_SITE_HOST;
+  } catch {
+    return FALLBACK_SITE_HOST;
+  }
+}
+
+/**
+ * CSRF guard for cookie-authenticated mutations.
+ *
+ * `new URL(request.url).origin` is NOT the browser origin in production:
+ * `next start --hostname 127.0.0.1 --port 3011` makes Next build `request.url`
+ * from the bind address, so comparing the browser's
+ * `https://baebe-boo.jtechinnovations.tech` against `https://127.0.0.1:3011`
+ * rejected every customer mutation behind nginx. The browser Origin must be
+ * checked against the proxied Host / X-Forwarded-Host instead, with
+ * NEXT_PUBLIC_SITE_URL as a deployment-configured backstop.
+ *
+ * A missing Origin means a non-browser client (browsers always send it on
+ * cross-origin POST/PATCH/DELETE), which carries no ambient-cookie CSRF risk —
+ * allowed unless Sec-Fetch-Site says otherwise. `Origin: null` (sandboxed
+ * iframe) fails `new URL` and is rejected.
+ */
+export function isTrustedMutationOrigin(request: Request): boolean {
+  const origin = request.headers.get("origin");
+
+  if (origin === null) {
+    const secFetchSite = request.headers.get("sec-fetch-site");
+    return secFetchSite === null || secFetchSite.toLowerCase() === "same-origin";
+  }
+
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (!originHost) return false;
+
+  const requestHost = (
+    request.headers.get("x-forwarded-host") ??
+    request.headers.get("host") ??
+    ""
+  )
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+
+  return originHost === requestHost || originHost === configuredSiteHost();
+}
+
 export async function authorizeCustomerMutation(
   request: Request,
   workflow: string,
   limit: number,
 ): Promise<AuthorizedCustomerMutation> {
-  const requestOrigin = new URL(request.url).origin;
-  if (request.headers.get("origin") !== requestOrigin) {
+  if (!isTrustedMutationOrigin(request)) {
     return {
       authorized: false,
       response: NextResponse.json({ message: "Invalid request origin." }, { status: 403 }),

@@ -5,7 +5,7 @@ import { ageRanges } from "@/components/storefront/catalog-data";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const age = ageRanges.find((item) => item.slug === slug);
-  return { title: `${age?.detail || "Shop by age"} | Baebe Boo`, description: `Age-suitable essentials for ${age?.detail || "every stage"}, carefully chosen by Baebe Boo.` };
+  return { title: `${age?.detail || "Shop by age"}`, description: `Age-suitable essentials for ${age?.detail || "every stage"}, carefully chosen by Baebe Boo.` };
 }
 
 export default async function AgePage({ params }: { params: Promise<{ slug: string }> }) {

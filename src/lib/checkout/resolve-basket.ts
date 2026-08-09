@@ -13,6 +13,12 @@ export type ResolvedVariant = {
   id: string;
   productId: string;
   price: number;
+  /**
+   * Captured at checkout so `report_daily_profit` computes COGS against the
+   * cost at the time of sale, not whatever the cost happens to be when the
+   * report is run.
+   */
+  costPrice: number;
   quantity: number;
 };
 
@@ -21,6 +27,7 @@ type VariantRow = {
   id: string;
   product_id: string;
   price: number | string;
+  cost_price: number | string | null;
   is_default: boolean;
 };
 type InventoryRow = {
@@ -84,7 +91,7 @@ export async function resolveCheckoutBasket(input: {
   const [{ data: productsData, error: productError }, { data: variantsData, error: variantError }] =
     await Promise.all([
       supabaseAdmin.from("products").select("id,name,price").in("id", productIds).eq("is_active", true),
-      supabaseAdmin.from("product_variants").select("id,product_id,price,is_default").in("product_id", productIds).eq("is_active", true),
+      supabaseAdmin.from("product_variants").select("id,product_id,price,cost_price,is_default").in("product_id", productIds).eq("is_active", true),
     ]);
   const products = (productsData || []) as ProductRow[];
   const variantRows = (variantsData || []) as VariantRow[];
@@ -108,6 +115,7 @@ export async function resolveCheckoutBasket(input: {
       id: selected.id,
       productId: selected.product_id,
       price: Number(selected.price),
+      costPrice: Number(selected.cost_price || 0),
       quantity,
     });
   }

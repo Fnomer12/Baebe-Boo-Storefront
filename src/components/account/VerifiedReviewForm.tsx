@@ -51,8 +51,8 @@ export default function VerifiedReviewForm({ purchases }: { purchases: Reviewabl
     }
   }
 
-  if (!purchases.length) return <p className="mt-8 rounded-3xl bg-[#f8f5f0] p-6 text-sm text-black/55">Products from delivered, paid orders will become available to review here.</p>;
-  const inputClass = "mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:border-sky-500";
+  if (!purchases.length) return <p className="mt-8 rounded-3xl bg-[var(--color-cream)] p-6 text-sm text-black/55">Products from delivered, paid orders will become available to review here.</p>;
+  const inputClass = "mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:border-[var(--color-brand)]";
 
   return (
     <form onSubmit={submit} className="mt-9 rounded-3xl border border-black/10 p-5 sm:p-6">

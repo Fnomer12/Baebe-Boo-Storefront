@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
+import { cartLineOptionSummary, cartLineSignature } from "@/domain/catalog/cart-line-options";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import {
   Minus,
@@ -11,39 +12,12 @@ import {
   Trash2,
   ShoppingBag,
   MapPin,
-  X,
-  CreditCard,
-  Phone,
-  User,
-  Home,
-  Mail,
 } from "lucide-react";
 
 type Shop = {
   id: string;
   name: string;
   location: string;
-};
-
-type DeliveryZone = {
-  id: string;
-  name: string;
-  baseFee: number;
-  freeDeliveryThreshold: number | null;
-  estimatedDaysMin: number | null;
-  estimatedDaysMax: number | null;
-};
-
-type CheckoutQuote = {
-  subtotal: number;
-  discount: number;
-  deliveryFee: number;
-  total: number;
-  promotionMessage: string | null;
-  promotionApplied: boolean;
-  promotionCodeValid: boolean;
-  split: boolean;
-  shipmentCount: number;
 };
 
 type CartItem = {
@@ -53,7 +27,11 @@ type CartItem = {
   age?: string;
   ageRange?: string;
   gender: string;
+  /** The chosen value per option. Lines saved before this shipped have none. */
+  optionValues?: Record<string, string>;
+  /** @deprecated The pre-variable-products shape, still read for one release. */
   color?: string;
+  /** @deprecated See `color`. */
   size?: string;
   price: number | string;
   quantity: number;
@@ -70,37 +48,14 @@ const cleanPrice = (price: number | string) => {
   return Number(price.replace(/[^\d.]/g, "")) || 0;
 };
 
-const cartItemKey = (item: CartItem) =>
-  [item.id, item.variantId || item.color || "default", item.size || "", item.shopId || item.shop?.id || "national"].join(":");
+// One key for both generations of cart line, and for products with a third
+// option the old colour/size key could not tell apart at all.
+const cartItemKey = (item: CartItem) => cartLineSignature(item);
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [message, setMessage] = useState("");
 
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("+233");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
-  const [placingOrder, setPlacingOrder] = useState(false);
-  const [fulfilmentType, setFulfilmentType] = useState<"delivery" | "pickup">("delivery");
-  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [deliveryZoneId, setDeliveryZoneId] = useState("");
-  const [pickupShopId, setPickupShopId] = useState("");
-  const [checkoutOptionsLoading, setCheckoutOptionsLoading] = useState(false);
-  const [promotionInput, setPromotionInput] = useState("");
-  const [appliedPromotionCode, setAppliedPromotionCode] = useState("");
-  const [quoteRevision, setQuoteRevision] = useState(0);
-  const [quote, setQuote] = useState<CheckoutQuote | null>(null);
-  const [quoteLoading, setQuoteLoading] = useState(false);
-  const checkoutDialogRef = useRef<HTMLDivElement>(null);
-  const checkoutTriggerRef = useRef<HTMLButtonElement>(null);
-  const placingOrderRef = useRef(placingOrder);
-
-  useEffect(() => {
-    placingOrderRef.current = placingOrder;
-  }, [placingOrder]);
 
   const showMessage = useCallback((text: string) => {
     setMessage(text);
@@ -119,127 +74,6 @@ export default function CartPage() {
   }, []);
 
   const selectedShop = cartItems[0]?.shop || null;
-
-  useEffect(() => {
-    if (!checkoutOpen) return;
-    if (!isSupabaseConfigured) return;
-    const controller = new AbortController();
-    const loadOptions = async () => {
-      setCheckoutOptionsLoading(true);
-      try {
-        const response = await fetch("/api/checkout/options", { signal: controller.signal });
-        const result = await response.json();
-        if (!response.ok || !result.status) throw new Error(result.message);
-        const nextZones = (result.deliveryZones || []) as DeliveryZone[];
-        const nextShops = (result.shops || []) as Shop[];
-        setDeliveryZones(nextZones);
-        setShops(nextShops);
-        setDeliveryZoneId((current) => current || nextZones[0]?.id || "");
-        setPickupShopId((current) => current || selectedShop?.id || nextShops[0]?.id || "");
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) {
-          showMessage(error instanceof Error ? error.message : "Checkout options are unavailable.");
-        }
-      } finally {
-        if (!controller.signal.aborted) setCheckoutOptionsLoading(false);
-      }
-    };
-    void loadOptions();
-    return () => controller.abort();
-  }, [checkoutOpen, selectedShop?.id, showMessage]);
-
-  useEffect(() => {
-    if (!checkoutOpen) return;
-    const checkoutTrigger = checkoutTriggerRef.current;
-    const focusFrame = window.requestAnimationFrame(() => {
-      checkoutDialogRef.current
-        ?.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled])")
-        ?.focus();
-    });
-    const handleDialogKeys = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !placingOrderRef.current) {
-        setCheckoutOpen(false);
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = Array.from(
-        checkoutDialogRef.current?.querySelectorAll<HTMLElement>(
-          "button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]",
-        ) ?? [],
-      );
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", handleDialogKeys);
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      window.removeEventListener("keydown", handleDialogKeys);
-      checkoutTrigger?.focus();
-    };
-  }, [checkoutOpen]);
-
-  useEffect(() => {
-    if (
-      !checkoutOpen ||
-      checkoutOptionsLoading ||
-      (fulfilmentType === "delivery" && !deliveryZoneId) ||
-      (fulfilmentType === "pickup" && !pickupShopId)
-    ) return;
-    const controller = new AbortController();
-    const loadQuote = async () => {
-      setQuoteLoading(true);
-      try {
-        const response = await fetch("/api/checkout/quote", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            items: cartItems.map((item) => ({
-              productId: item.id,
-              variantId: item.variantId,
-              quantity: Number(item.quantity || 1),
-            })),
-            fulfilmentType,
-            deliveryZoneId: fulfilmentType === "delivery" ? deliveryZoneId : undefined,
-            shopId: fulfilmentType === "pickup" ? pickupShopId : undefined,
-            preferredShopId: fulfilmentType === "delivery" ? selectedShop?.id : undefined,
-            promotionCode: appliedPromotionCode || undefined,
-          }),
-        });
-        const result = await response.json();
-        if (!response.ok || !result.status) throw new Error(result.message);
-        setQuote(result.data as CheckoutQuote);
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) {
-          setQuote(null);
-          showMessage(error instanceof Error ? error.message : "Could not calculate checkout pricing.");
-        }
-      } finally {
-        if (!controller.signal.aborted) setQuoteLoading(false);
-      }
-    };
-    void loadQuote();
-    return () => controller.abort();
-  }, [
-    appliedPromotionCode,
-    cartItems,
-    checkoutOpen,
-    checkoutOptionsLoading,
-    deliveryZoneId,
-    fulfilmentType,
-    pickupShopId,
-    quoteRevision,
-    selectedShop?.id,
-    showMessage,
-  ]);
 
   const subtotal = cartItems.reduce(
     (total, item) => total + cleanPrice(item.price) * Number(item.quantity || 1),
@@ -260,24 +94,6 @@ export default function CartPage() {
     }
 
     window.dispatchEvent(new Event("baebe_cart_updated"));
-  };
-
-  const handlePhoneChange = (value: string) => {
-    const digitsOnly = value.replace(/[^\d]/g, "");
-
-    let nationalNumber = digitsOnly;
-
-    if (nationalNumber.startsWith("233")) {
-      nationalNumber = nationalNumber.slice(3);
-    }
-
-    if (nationalNumber.startsWith("0")) {
-      nationalNumber = nationalNumber.slice(1);
-    }
-
-    nationalNumber = nationalNumber.slice(0, 9);
-
-    setCustomerPhone(`+233${nationalNumber}`);
   };
 
   const increaseQuantity = async (lineKey: string) => {
@@ -366,162 +182,9 @@ export default function CartPage() {
     updateCart(cartItems.filter((item) => cartItemKey(item) !== lineKey));
   };
 
-  const validateCheckout = () => {
-    if (!customerName.trim()) {
-      showMessage("Enter customer name.");
-      return false;
-    }
-
-    if (!customerEmail.trim() || !customerEmail.includes("@")) {
-      showMessage("Enter a valid email address.");
-      return false;
-    }
-
-    if (!customerPhone.startsWith("+233") || customerPhone.length !== 13) {
-      showMessage("Enter a valid Ghana number starting with +233.");
-      return false;
-    }
-
-    if (fulfilmentType === "delivery" && !deliveryZoneId) {
-      showMessage("Choose a delivery zone.");
-      return false;
-    }
-
-    if (fulfilmentType === "delivery" && !deliveryAddress.trim()) {
-      showMessage("Enter delivery address.");
-      return false;
-    }
-
-    if (fulfilmentType === "pickup" && !pickupShopId) {
-      showMessage("Choose a collection branch.");
-      return false;
-    }
-
-    if (cartItems.length === 0) {
-      showMessage("Your cart is empty.");
-      return false;
-    }
-
-    if (subtotal <= 0) {
-      showMessage("Invalid cart total.");
-      return false;
-    }
-
-    if (!quote) {
-      showMessage("Wait for the secure checkout total to finish loading.");
-      return false;
-    }
-
-    return true;
-  };
-
-  const createOnlineOrder = async () => {
-    if (!validateCheckout()) return;
-
-    const cartSnapshot = [...cartItems];
-
-    try {
-      setPlacingOrder(true);
-
-      const initRes = await fetch("/api/paystack/initialize", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: customerEmail.trim(),
-          name: customerName.trim(),
-          phone: customerPhone.trim(),
-          deliveryAddress: deliveryAddress.trim(),
-          fulfilmentType,
-          deliveryZoneId: fulfilmentType === "delivery" ? deliveryZoneId : undefined,
-          shopId: fulfilmentType === "pickup" ? pickupShopId : undefined,
-          preferredShopId: fulfilmentType === "delivery" ? selectedShop?.id : undefined,
-          promotionCode: appliedPromotionCode || undefined,
-          items: cartSnapshot.map((item) => ({
-            productId: item.id,
-            variantId: item.variantId,
-            quantity: Number(item.quantity || 1),
-          })),
-        }),
-      });
-
-      const initData = await initRes.json();
-
-      if (!initRes.ok || !initData.status || !initData.data?.access_code) {
-        showMessage(initData.message || "Could not start Paystack payment.");
-        setPlacingOrder(false);
-        return;
-      }
-
-      const PaystackPop = (await import("@paystack/inline-js")).default;
-      const popup = new PaystackPop();
-
-      popup.resumeTransaction(initData.data.access_code, {
-        onSuccess: async (transaction: { reference?: string }) => {
-          try {
-            const reference = transaction?.reference || initData.data.reference;
-
-            if (!reference) {
-              showMessage("Payment reference not found.");
-              setPlacingOrder(false);
-              return;
-            }
-
-            const verifyRes = await fetch("/api/paystack/verify", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-                body: JSON.stringify({
-                  reference,
-                  orderId: initData.data.order_id,
-                }),
-            });
-
-            const verifyData = await verifyRes.json();
-
-            if (!verifyRes.ok || !verifyData.status) {
-              showMessage(
-                verifyData.message || "Payment could not be verified."
-              );
-              setPlacingOrder(false);
-              return;
-            }
-
-            updateCart([]);
-            setCheckoutOpen(false);
-            setCustomerName("");
-            setCustomerEmail("");
-            setCustomerPhone("+233");
-            setDeliveryAddress("");
-            setPromotionInput("");
-            setAppliedPromotionCode("");
-            setQuote(null);
-            setPlacingOrder(false);
-
-            showMessage("Payment successful. Order sent to admin notifications.");
-          } catch (error: unknown) {
-            setPlacingOrder(false);
-            showMessage(error instanceof Error ? error.message : "Could not save order.");
-          }
-        },
-
-        onCancel: () => {
-          setPlacingOrder(false);
-          showMessage("Payment cancelled.");
-        },
-      });
-    } catch {
-      setPlacingOrder(false);
-      showMessage("Something went wrong while starting Paystack.");
-    }
-  };
-
   return (
     <main className="min-h-screen bg-[#F8F5F0] text-black">
-      <div aria-hidden={checkoutOpen} inert={checkoutOpen ? true : undefined}>
-        <Navbar cartCount={cartCount} />
+      <Navbar cartCount={cartCount} />
 
       {message && (
         <div className="fixed left-1/2 top-20 z-[90] w-[92%] max-w-md -translate-x-1/2 rounded-3xl bg-black px-5 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-24 sm:rounded-full">
@@ -619,9 +282,9 @@ export default function CartPage() {
       <p className="mt-3 text-sm text-black/50 md:text-base">
         {item.ageRange || item.age} · {item.gender}
       </p>
-      {(item.color || item.size) && (
+      {cartLineOptionSummary(item) && (
         <p className="mt-2 text-sm font-semibold text-black/60">
-          {[item.color, item.size].filter(Boolean).join(" · ")}
+          {cartLineOptionSummary(item)}
         </p>
       )}
 
@@ -715,288 +378,19 @@ export default function CartPage() {
                   </div>
                 </div>
 
-               <button
-  ref={checkoutTriggerRef}
-  onClick={() => {
-    setCheckoutOpen(true);
-    if (!isSupabaseConfigured) {
-      showMessage("Checkout options are temporarily unavailable.");
-    }
-  }}
-  disabled={placingOrder}
-  className="shimmer-btn mt-6 h-14 w-full rounded-full bg-black text-sm font-semibold text-white shadow-lg transition hover:scale-[1.02] hover:bg-neutral-900 disabled:opacity-50"
->
-  <span className="relative z-10 text-white">
-    Proceed to Checkout
-  </span>
-</button>
+                <Link
+                  href="/checkout"
+                  className="shimmer-btn mt-6 flex h-14 w-full items-center justify-center rounded-full bg-black text-sm font-semibold text-white shadow-lg transition hover:scale-[1.02] hover:bg-neutral-900"
+                >
+                  <span className="relative z-10 text-white">
+                    Proceed to Checkout
+                  </span>
+                </Link>
               </aside>
             </div>
           )}
         </div>
       </section>
-      </div>
-
-      {checkoutOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/35 px-3 py-3 backdrop-blur-md sm:items-center sm:px-4">
-          <div ref={checkoutDialogRef} role="dialog" aria-modal="true" aria-labelledby="checkout-title" className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[1.75rem] border border-white/40 bg-white/90 p-4 shadow-2xl backdrop-blur-xl sm:rounded-[2rem] sm:p-6">
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/40 sm:tracking-[0.2em]">
-                  Online Checkout
-                </p>
-                <h2 id="checkout-title" className="mt-1 text-2xl font-semibold">
-                  Delivery Details
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-black/50">
-                  Pay online and your order will go to admin notifications.
-                </p>
-              </div>
-
-              <button
-                aria-label="Close checkout"
-                onClick={() => {
-                  if (!placingOrder) setCheckoutOpen(false);
-                }}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <fieldset className="rounded-3xl border border-black/10 bg-white/90 p-4">
-                <legend className="px-2 text-sm font-semibold">How would you like your order?</legend>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setFulfilmentType("delivery")}
-                    className={`rounded-2xl border px-3 py-3 text-left text-sm font-semibold transition ${
-                      fulfilmentType === "delivery"
-                        ? "border-black bg-black text-white"
-                        : "border-black/10 bg-white text-black"
-                    }`}
-                  >
-                    Delivery
-                    <span className={`mt-1 block text-xs font-normal ${fulfilmentType === "delivery" ? "text-white/65" : "text-black/50"}`}>
-                      Nationwide to your address
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFulfilmentType("pickup")}
-                    className={`rounded-2xl border px-3 py-3 text-left text-sm font-semibold transition ${
-                      fulfilmentType === "pickup"
-                        ? "border-black bg-black text-white"
-                        : "border-black/10 bg-white text-black"
-                    }`}
-                  >
-                    Click & collect
-                    <span className={`mt-1 block text-xs font-normal ${fulfilmentType === "pickup" ? "text-white/65" : "text-black/50"}`}>
-                      No delivery charge
-                    </span>
-                  </button>
-                </div>
-
-                <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-black/45" htmlFor="fulfilment-location">
-                  {fulfilmentType === "delivery" ? "Delivery zone" : "Collection branch"}
-                </label>
-                <select
-                  id="fulfilment-location"
-                  value={fulfilmentType === "delivery" ? deliveryZoneId : pickupShopId}
-                  onChange={(event) =>
-                    fulfilmentType === "delivery"
-                      ? setDeliveryZoneId(event.target.value)
-                      : setPickupShopId(event.target.value)
-                  }
-                  disabled={checkoutOptionsLoading}
-                  className="mt-2 h-12 w-full rounded-full border border-black/10 bg-white px-4 text-sm outline-none disabled:opacity-50"
-                >
-                  <option value="">
-                    {checkoutOptionsLoading ? "Loading options…" : "Choose an option"}
-                  </option>
-                  {fulfilmentType === "delivery"
-                    ? deliveryZones.map((zone) => (
-                        <option key={zone.id} value={zone.id}>
-                          {zone.name} · GH₵{zone.baseFee.toLocaleString()}
-                          {zone.estimatedDaysMin !== null
-                            ? ` · ${zone.estimatedDaysMin}-${zone.estimatedDaysMax ?? zone.estimatedDaysMin} days`
-                            : ""}
-                        </option>
-                      ))
-                    : shops.map((shop) => (
-                        <option key={shop.id} value={shop.id}>
-                          {shop.name} · {shop.location}
-                        </option>
-                      ))}
-                </select>
-              </fieldset>
-
-              <InputIcon icon={<User size={18} />} input={
-                <input
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Customer name"
-                  className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
-                />
-              } />
-
-              <InputIcon icon={<Mail size={18} />} input={
-                <input
-                  value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
-                  placeholder="Customer email"
-                  type="email"
-                  className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
-                />
-              } />
-
-              <InputIcon icon={<Phone size={18} />} input={
-                <input
-                  value={customerPhone}
-                  onChange={(e) => handlePhoneChange(e.target.value)}
-                  placeholder="+233 phone number"
-                  className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
-                />
-              } />
-
-              {fulfilmentType === "delivery" && (
-                <div className="relative">
-                  <Home size={18} className="absolute left-5 top-5 text-black/40" />
-                  <textarea
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
-                    placeholder="Delivery address and GhanaPost GPS code"
-                    className="min-h-28 w-full resize-none rounded-3xl border border-black/10 bg-white/90 px-12 py-4 outline-none"
-                  />
-                </div>
-              )}
-
-              <div className="rounded-3xl border border-black/10 bg-white/90 p-4">
-                <label htmlFor="promotion-code" className="text-sm font-semibold">
-                  Promotion code
-                </label>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    id="promotion-code"
-                    value={promotionInput}
-                    onChange={(event) => setPromotionInput(event.target.value.toUpperCase())}
-                    placeholder="Enter code"
-                    className="h-12 min-w-0 flex-1 rounded-full border border-black/10 bg-white px-4 text-sm uppercase outline-none"
-                  />
-                  <button
-                    type="button"
-                    disabled={!promotionInput.trim() || quoteLoading}
-                    onClick={() => {
-                      setAppliedPromotionCode(promotionInput.trim());
-                      setQuoteRevision((revision) => revision + 1);
-                    }}
-                    className="rounded-full bg-black px-5 text-sm font-semibold text-white disabled:opacity-40"
-                  >
-                    Apply
-                  </button>
-                </div>
-                {quote?.promotionMessage && (
-                  <p
-                    role="status"
-                    className={`mt-2 text-sm ${quote.promotionCodeValid ? "text-emerald-700" : "text-red-600"}`}
-                  >
-                    {quote.promotionMessage}
-                  </p>
-                )}
-                {appliedPromotionCode && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPromotionInput("");
-                      setAppliedPromotionCode("");
-                    }}
-                    className="mt-2 text-xs font-semibold text-black/55 underline underline-offset-4"
-                  >
-                    Remove code
-                  </button>
-                )}
-              </div>
-
-              <div className="rounded-3xl bg-white/90 p-5">
-                <div className="mb-3 flex items-center gap-2">
-                  <CreditCard size={18} />
-                  <p className="text-sm font-semibold">Payment Method</p>
-                </div>
-
-                <div className="rounded-2xl border border-black bg-black px-4 py-3 text-sm font-semibold text-white">
-                  Paystack Online Payment
-                </div>
-
-                <div className="mt-5 space-y-2 border-t border-black/10 pt-4 text-sm">
-                  <div className="flex justify-between gap-4">
-                    <span className="text-black/55">Subtotal</span>
-                    <span>GH₵{(quote?.subtotal ?? subtotal).toLocaleString()}</span>
-                  </div>
-                  {(quote?.discount ?? 0) > 0 && (
-                    <div className="flex justify-between gap-4 text-emerald-700">
-                      <span>Promotion</span>
-                      <span>−GH₵{quote?.discount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between gap-4">
-                    <span className="text-black/55">
-                      {fulfilmentType === "pickup" ? "Collection" : "Delivery"}
-                    </span>
-                    <span>
-                      {quoteLoading
-                        ? "Calculating…"
-                        : (quote?.deliveryFee ?? 0) === 0
-                          ? "Free"
-                          : `GH₵${quote?.deliveryFee.toLocaleString()}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4 pt-2 text-lg font-bold">
-                    <span>Total</span>
-                    <span>GH₵{(quote?.total ?? subtotal).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {quote?.split && fulfilmentType === "delivery" && (
-                  <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
-                    Your cart will arrive in {quote.shipmentCount} shipments from different branches. The delivery total already includes each shipment.
-                  </p>
-                )}
-                {fulfilmentType === "pickup" && (
-                  <p className="mt-4 text-xs leading-5 text-black/50">
-                    Collection is only confirmed when this branch can reserve the complete cart.
-                  </p>
-                )}
-              </div>
-
-              <button
-                onClick={createOnlineOrder}
-                disabled={placingOrder || quoteLoading || !quote}
-                className="h-14 w-full rounded-full bg-black text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {placingOrder ? "Processing Payment..." : "Pay Online"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
-  );
-}
-
-function InputIcon({
-  icon,
-  input,
-}: {
-  icon: React.ReactNode;
-  input: React.ReactNode;
-}) {
-  return (
-    <div className="relative">
-      <div className="absolute left-5 top-1/2 -translate-y-1/2 text-black/40">
-        {icon}
-      </div>
-      {input}
-    </div>
   );
 }
