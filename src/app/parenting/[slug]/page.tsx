@@ -30,8 +30,15 @@ function formatDate(iso: string | undefined) {
 }
 
 export async function generateStaticParams() {
-  const posts = await listPublishedContentPosts();
-  return posts.map((post) => ({ slug: post.slug }));
+  // A build without reachable Supabase credentials (CI, a fresh Vercel
+  // preview) must not fail the whole deploy over prerender params — the
+  // articles simply render on demand instead.
+  try {
+    const posts = await listPublishedContentPosts();
+    return posts.map((post) => ({ slug: post.slug }));
+  } catch {
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {

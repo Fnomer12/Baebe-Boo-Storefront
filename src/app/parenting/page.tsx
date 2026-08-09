@@ -12,7 +12,10 @@ export const metadata: Metadata = {
 };
 
 export default async function ParentingPage() {
-  const articles = await listPublishedContentPosts();
+  // An unreachable CMS reads as "no articles yet": the hub 404s (as it already
+  // does for an empty catalog) instead of failing the static build on hosts
+  // without live Supabase credentials.
+  const articles = await listPublishedContentPosts().catch(() => []);
   if (articles.length === 0) notFound();
 
   const featured = articles[0];
