@@ -25,7 +25,7 @@ function tryRead(relativePath: string): Buffer | null {
     // statically analysable, so webpack cannot try to bundle or trace it. pm2
     // pins `cwd` to the repo root in `ecosystem.config.cjs`, and `next start`,
     // `next dev` and vitest all run from there too.
-    return readFileSync(join(process.cwd(), relativePath));
+    return readFileSync(join(/*turbopackIgnore: true*/ process.cwd(), relativePath));
   } catch {
     return null;
   }

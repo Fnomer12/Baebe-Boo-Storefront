@@ -152,32 +152,40 @@ async function loadReceiptOrderBy(
     .select(
       `id, order_number, customer_name, customer_email, customer_phone,
        delivery_address, order_status, payment_status, order_type,
-       total_amount, voucher_credit, created_at, shop_id,
-       shops(name, location, whatsapp_number)`,
+       total_amount, voucher_credit, created_at, shop_id`,
     )
     .eq(column, value)
     .maybeSingle();
 
   if (error || !order) return null;
 
-  const [{ data: items }, { data: payments }, { data: allocations }, { data: promotions }] =
-    await Promise.all([
-      supabaseAdmin
-        .from("order_items")
-        .select("id, product_name, quantity, unit_price, total_price, price")
-        .eq("order_id", order.id)
-        .order("created_at", { ascending: true }),
-      supabaseAdmin
-        .from("payment_attempts")
-        .select("id, provider, provider_reference, amount, status, verified_at")
-        .eq("order_id", order.id)
-        .order("created_at", { ascending: true }),
-      supabaseAdmin.from("fulfilment_allocations").select("delivery_fee").eq("order_id", order.id),
-      supabaseAdmin.from("applied_promotions").select("discount_amount").eq("order_id", order.id),
-    ]);
-
-  const shopRows = order.shops as Record<string, unknown>[] | null;
-  const shopRow = Array.isArray(shopRows) && shopRows.length > 0 ? shopRows[0] : null;
+  const [
+    { data: items },
+    { data: payments },
+    { data: allocations },
+    { data: promotions },
+    { data: shopRow },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("order_items")
+      .select("id, product_name, quantity, unit_price, total_price, price")
+      .eq("order_id", order.id)
+      .order("created_at", { ascending: true }),
+    supabaseAdmin
+      .from("payment_attempts")
+      .select("id, provider, provider_reference, amount, status, verified_at")
+      .eq("order_id", order.id)
+      .order("created_at", { ascending: true }),
+    supabaseAdmin.from("fulfilment_allocations").select("delivery_fee").eq("order_id", order.id),
+    supabaseAdmin.from("applied_promotions").select("discount_amount").eq("order_id", order.id),
+    order.shop_id
+      ? supabaseAdmin
+          .from("shops")
+          .select("name, location, whatsapp_number")
+          .eq("id", order.shop_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
 
   const lineItems = (items || []).map((item) => {
     // `complete_counter_sale` writes `price` while online checkout writes

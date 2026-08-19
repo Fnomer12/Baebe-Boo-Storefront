@@ -99,6 +99,8 @@ const cartItemKey = (item: CartItem) =>
 
 const formatMoney = (value: number) => `GH₵${value.toLocaleString()}`;
 
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -348,7 +350,7 @@ export default function CheckoutPage() {
       showMessage("Enter customer name.");
       return false;
     }
-    if (!customerEmail.trim() || !customerEmail.includes("@")) {
+    if (!customerEmail.trim() || !emailPattern.test(customerEmail.trim())) {
       showMessage("Enter a valid email address.");
       return false;
     }

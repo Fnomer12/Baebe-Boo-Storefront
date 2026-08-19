@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   AlertTriangle,
@@ -59,13 +59,14 @@ type OrderItem = {
 
 type OrderDetail = OrderSummary & { items: OrderItem[] };
 
-type QueueTab = "attention" | "received" | "dispatch" | "delivered" | "hold";
+type QueueTab = "attention" | "received" | "processing" | "dispatch" | "delivered" | "hold";
 
 type OrderActionStatus = OrderStatus | "dispatch" | "hold";
 
 const tabs: { key: QueueTab; label: string; icon: typeof Box }[] = [
   { key: "attention", label: "Needs attention", icon: AlertTriangle },
   { key: "received", label: "Received", icon: Package },
+  { key: "processing", label: "Processing", icon: Clock },
   { key: "dispatch", label: "Dispatch", icon: Truck },
   { key: "delivered", label: "Delivered", icon: CheckCircle2 },
   { key: "hold", label: "On hold", icon: Clock },
@@ -115,6 +116,12 @@ export default function OrdersWorkspace({ view }: { view?: string }) {
   const [resending, setResending] = useState<string | null>(null);
   const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+
+  const showMessage = useCallback((text: string) => {
+    setMessage(text);
+    setTimeout(() => setMessage(""), 3500);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,6 +159,8 @@ export default function OrdersWorkspace({ view }: { view?: string }) {
         return list.filter((o) => o.status === "paid" || o.status === "pending_approval");
       case "received":
         return list.filter((o) => o.status === "received");
+      case "processing":
+        return list.filter((o) => o.status === "processing");
       case "dispatch":
         return list.filter((o) => o.status === "dispatched" || o.status === "shipped");
       case "delivered":
@@ -180,7 +189,7 @@ export default function OrdersWorkspace({ view }: { view?: string }) {
         setDetail((d) => (d ? { ...d, status: normalizeStatus(nextStatus) as OrderStatus } : d));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Update failed.");
+      showMessage(err instanceof Error ? err.message : "Update failed.");
     } finally {
       setUpdating(null);
     }
@@ -213,7 +222,7 @@ export default function OrdersWorkspace({ view }: { view?: string }) {
         setReceiptNotice("Receipt sent with the PDF attached.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "The receipt could not be sent.");
+      showMessage(err instanceof Error ? err.message : "The receipt could not be sent.");
     } finally {
       setResending(null);
     }
@@ -249,6 +258,12 @@ export default function OrdersWorkspace({ view }: { view?: string }) {
         </div>
       </div>
 
+      {message && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          {message}
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-sm sm:flex-row sm:items-center">
         <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl bg-[var(--color-cream)] px-4">
           <Search size={17} style={{ color: "var(--color-ink-soft)" }} />
@@ -267,6 +282,7 @@ export default function OrdersWorkspace({ view }: { view?: string }) {
           const count = orders.filter((o) => {
             if (key === "attention") return o.status === "paid" || o.status === "pending_approval";
             if (key === "received") return o.status === "received";
+            if (key === "processing") return o.status === "processing";
             if (key === "dispatch") return o.status === "dispatched" || o.status === "shipped";
             if (key === "delivered") return o.status === "delivered";
             return o.status === "on_hold";
@@ -350,55 +366,77 @@ export default function OrdersWorkspace({ view }: { view?: string }) {
                   </button>
                 )}
                 {activeTab === "received" && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={updating === order.id}
+                      onClick={() => updateStatus(order.id, "on_hold")}
+                      className="admin-button-secondary px-3 py-2 text-xs"
+                    >
+                      Hold
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updating === order.id}
+                      onClick={() => updateStatus(order.id, "processing")}
+                      className="admin-button flex-1 px-3 py-2 text-xs"
+                    >
+                      <Clock size={14} />
+                      {updating === order.id ? "…" : "Process"}
+                    </button>
+                  </>
+                )}
+                {activeTab === "processing" && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={updating === order.id}
+                      onClick={() => updateStatus(order.id, "on_hold")}
+                      className="admin-button-secondary px-3 py-2 text-xs"
+                    >
+                      Hold
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updating === order.id}
+                      onClick={() => updateStatus(order.id, "dispatched")}
+                      className="admin-button flex-1 px-3 py-2 text-xs"
+                    >
+                      <Truck size={14} />
+                      {updating === order.id ? "…" : "Dispatch"}
+                    </button>
+                  </>
+                )}
+                {activeTab === "dispatch" && (
                   <button
                     type="button"
                     disabled={updating === order.id}
-                    onClick={() => updateStatus(order.id, "dispatched")}
+                    onClick={() => updateStatus(order.id, "delivered")}
                     className="admin-button flex-1 px-3 py-2 text-xs"
                   >
-                    <Truck size={14} />
-                    {updating === order.id ? "…" : "Dispatch"}
+                    Deliver
                   </button>
                 )}
-                {activeTab === "dispatch" && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={updating === order.id}
-                      onClick={() => updateStatus(order.id, "on_hold")}
-                      className="admin-button-secondary px-3 py-2 text-xs"
-                    >
-                      Hold
-                    </button>
-                    <button
-                      type="button"
-                      disabled={updating === order.id}
-                      onClick={() => updateStatus(order.id, "delivered")}
-                      className="admin-button flex-1 px-3 py-2 text-xs"
-                    >
-                      Deliver
-                    </button>
-                  </>
-                )}
                 {activeTab === "delivered" && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={updating === order.id}
-                      onClick={() => updateStatus(order.id, "on_hold")}
-                      className="admin-button-secondary px-3 py-2 text-xs"
-                    >
-                      Hold
-                    </button>
-                    <button
-                      type="button"
-                      disabled={updating === order.id}
-                      onClick={() => updateStatus(order.id, "completed")}
-                      className="admin-button flex-1 px-3 py-2 text-xs"
-                    >
-                      Complete
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    disabled={updating === order.id}
+                    onClick={() => updateStatus(order.id, "completed")}
+                    className="admin-button flex-1 px-3 py-2 text-xs"
+                  >
+                    Complete
+                  </button>
+                )}
+                {activeTab === "hold" && (
+                  <button
+                    type="button"
+                    disabled={updating === order.id}
+                    onClick={() => updateStatus(order.id, "processing")}
+                    className="admin-button flex-1 px-3 py-2 text-xs"
+                  >
+                    <Clock size={14} />
+                    {updating === order.id ? "…" : "Resume"}
+                  </button>
                 )}
               </div>
             </div>

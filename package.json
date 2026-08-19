@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "prebuild": "node scripts/preserve-next-static.mjs snapshot",
-    "build": "next build --webpack",
+    "build": "next build",
     "postbuild": "node scripts/preserve-next-static.mjs restore",
     "start": "next start",
     "lint": "eslint",

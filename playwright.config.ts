@@ -19,12 +19,13 @@ const authenticated = process.env.QA_AUTHENTICATED_E2E === "1";
 // Overridable so a run can attach to a dev server that is already up rather
 // than paying to boot a second one.
 const port = process.env.E2E_PORT || "3012";
-const baseURL = `http://127.0.0.1:${port}`;
+const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
   fullyParallel: true,
+  workers: process.env.CI ? undefined : 1,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
@@ -58,7 +59,7 @@ export default defineConfig({
       : []),
   ],
   webServer: {
-    command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
+    command: `npm run dev -- --hostname localhost --port ${port}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
