@@ -14,7 +14,7 @@ import AnalyticsScripts from "@/components/analytics/AnalyticsScripts";
 import WishlistSync from "@/components/account/WishlistSync";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://baebe-boo.jtechinnovations.tech"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://baebeboo.com"),
   title: {
     default: "Baebe Boo | Everything baby and child",
     template: "%s | Baebe Boo",

@@ -8,7 +8,7 @@ import { formatCedis } from "@/domain/money";
  */
 function siteUrl(path = ""): string {
   const origin = (
-    process.env.NEXT_PUBLIC_SITE_URL || "https://baebe-boo.jtechinnovations.tech"
+    process.env.NEXT_PUBLIC_SITE_URL || "https://baebeboo.com"
   ).replace(/\/+$/, "");
   return `${origin}${path}`;
 }

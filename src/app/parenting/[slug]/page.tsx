@@ -81,7 +81,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
               By <strong>{authorName}</strong>
               {updatedAt && <> · Updated {updatedAt}</>}
             </span>
-            <ArticleShare url={`https://baebe-boo.jtechinnovations.tech/parenting/${post.slug}`} />
+            <ArticleShare url={`https://baebeboo.com/parenting/${post.slug}`} />
           </div>
         </header>
 
