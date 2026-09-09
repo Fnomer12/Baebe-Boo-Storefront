@@ -6,7 +6,6 @@ import { authorizeAdminApi } from "@/lib/auth";
 import {
   buildNativeCalibrationJob,
   buildNativeLabelJob,
-  printNativeJob,
 } from "@/lib/labels/native-print";
 import {
   labelFilename,
@@ -28,8 +27,9 @@ const bodySchema = z.object({
   items: z.array(itemSchema).min(1).max(100).optional(),
   /** Print the calibration page instead of labels. */
   calibration: z.boolean().optional(),
-  /** Send the generated PDF directly to the laptop's configured CUPS queue. */
+  /** Request a print payload for the workstation-local connector. */
   print: z.boolean().optional(),
+  transport: z.literal("local").optional(),
   /** Queue selected and verified by the printer setup flow. */
   printer: z.string().trim().min(1).max(128).optional(),
 });
@@ -74,8 +74,18 @@ export async function POST(request: Request) {
   try {
     if (parsed.data.calibration) {
       if (parsed.data.print) {
-        const result = await printNativeJob(buildNativeCalibrationJob(), "Baebe Boo label calibration");
-        return NextResponse.json({ printed: true, ...result });
+        if (parsed.data.transport !== "local") {
+          return NextResponse.json(
+            { message: "Use the local printer connector for physical calibration printing." },
+            { status: 400 },
+          );
+        }
+        return NextResponse.json({
+          printed: false,
+          transport: "local-bridge",
+          title: "Baebe Boo label calibration",
+          jobBase64: buildNativeCalibrationJob().toString("base64"),
+        });
       }
       const pdf = await renderLabelCalibrationPdf();
       return new NextResponse(new Uint8Array(pdf), {
@@ -135,6 +145,12 @@ export async function POST(request: Request) {
     }
 
     if (parsed.data.print) {
+      if (parsed.data.transport !== "local") {
+        return NextResponse.json(
+          { message: "Use the local printer connector for physical label printing." },
+          { status: 400 },
+        );
+      }
       const printer = parsed.data.printer?.trim();
       const verifiedPrinter = (await cookies()).get("baebe_printer_verified")?.value;
       if (!printer || verifiedPrinter !== printer) {
@@ -143,12 +159,14 @@ export async function POST(request: Request) {
           { status: 428 },
         );
       }
-      const result = await printNativeJob(
-        buildNativeLabelJob(labels.slice(0, 200)),
-        "Baebe Boo shelf labels",
+      return NextResponse.json({
+        printed: false,
+        transport: "local-bridge",
         printer,
-      );
-      return NextResponse.json({ printed: true, ...result, count: Math.min(labels.length, 200) });
+        title: "Baebe Boo shelf labels",
+        jobBase64: buildNativeLabelJob(labels.slice(0, 200)).toString("base64"),
+        count: Math.min(labels.length, 200),
+      });
     }
     const pdf = await renderShelfLabelsPdf(labels.slice(0, 200));
     return new NextResponse(new Uint8Array(pdf), {

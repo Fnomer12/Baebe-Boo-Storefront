@@ -8,6 +8,7 @@
     "build": "next build",
     "postbuild": "node scripts/preserve-next-static.mjs restore",
     "start": "next start",
+    "printer:bridge": "node scripts/local-printer-bridge.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

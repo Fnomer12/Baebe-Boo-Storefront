@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, Printer } from "lucide-react";
 import { AdminModal } from "@/components/admin/AdminWorkspacePrimitives";
+import { sendLocalPrintJob } from "@/lib/labels/local-printer";
 import CounterPrinterSetup from "./CounterPrinterSetup";
 
 export type CounterReceiptForPrint = {
@@ -36,22 +37,32 @@ export default function CounterReceiptPrintModal({
   const [printerSetupOpen, setPrinterSetupOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [verifiedPrinter, setVerifiedPrinter] = useState("");
 
   async function printReceipt() {
     if (!receipt) return;
+    if (!verifiedPrinter) {
+      setPrinterSetupOpen(true);
+      setError("Connect this workstation's printer and complete its physical test first.");
+      return;
+    }
     setPrinting(true);
     setError("");
     setNotice("");
     try {
       const response = await fetch(`/api/counter/sales/${receipt.id}/receipt/print`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transport: "local", printer: verifiedPrinter }),
       });
-      const payload = await response.json().catch(() => null);
+      const payload = (await response.json().catch(() => null)) as { message?: string; title?: string; jobBase64?: string } | null;
       if (!response.ok) {
         if (response.status === 428 || response.status === 409) setPrinterSetupOpen(true);
         throw new Error(payload?.message || "The receipt could not be printed.");
       }
-      setNotice(`Receipt sent to ${payload?.printer || "the counter printer"}.`);
+      if (!payload?.jobBase64) throw new Error("The server did not return a printable receipt job.");
+      const printed = await sendLocalPrintJob({ printer: verifiedPrinter, title: payload.title || "Baebe Boo counter receipt", jobBase64: payload.jobBase64 });
+      setNotice(`Receipt sent to ${printed.printer} (${printed.jobId}).`);
     } catch (printError) {
       setError(printError instanceof Error ? printError.message : "The receipt could not be printed.");
     } finally {
@@ -102,7 +113,8 @@ export default function CounterReceiptPrintModal({
 
         <CounterPrinterSetup
           open={printerSetupOpen}
-          onVerified={() => {
+          onVerified={(printer) => {
+            setVerifiedPrinter(printer);
             setPrinterSetupOpen(false);
             setError("");
             setNotice("Printer verified. Press Print Receipt to send this receipt.");

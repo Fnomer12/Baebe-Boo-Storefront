@@ -11,6 +11,7 @@ import {
   type AdminTableColumn,
 } from "@/components/admin/AdminWorkspacePrimitives";
 import { formatCedis } from "@/domain/counter/money";
+import { sendLocalPrintJob } from "@/lib/labels/local-printer";
 import CounterPrinterSetup from "./CounterPrinterSetup";
 
 type CounterSaleSummary = {
@@ -64,6 +65,7 @@ export default function CounterSalesWorkspace() {
   const [printingReceiptId, setPrintingReceiptId] = useState<string | null>(null);
   const [receiptNotice, setReceiptNotice] = useState("");
   const [printerSetupOpen, setPrinterSetupOpen] = useState(false);
+  const [verifiedPrinter, setVerifiedPrinter] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,19 +114,32 @@ export default function CounterSalesWorkspace() {
   };
 
   const printReceipt = async (saleId: string) => {
+    if (!verifiedPrinter) {
+      setPrinterSetupOpen(true);
+      setReceiptError("Connect this workstation's printer and complete its physical test first.");
+      return;
+    }
     setPrintingReceiptId(saleId);
     setReceiptError("");
     setReceiptNotice("");
     try {
       const response = await fetch(`/api/counter/sales/${saleId}/receipt/print`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transport: "local", printer: verifiedPrinter }),
       });
-      const payload = await response.json().catch(() => null);
+      const payload = (await response.json().catch(() => null)) as { message?: string; printer?: string; title?: string; jobBase64?: string; jobId?: string } | null;
       if (!response.ok) {
         if (response.status === 428 || response.status === 409) setPrinterSetupOpen(true);
         throw new Error(payload?.message || "The receipt could not be printed.");
       }
-      setReceiptNotice(`Receipt sent to ${payload?.printer || "the counter printer"} (${payload?.jobId || "job submitted"}).`);
+      if (!payload?.jobBase64) throw new Error("The server did not return a printable receipt job.");
+      const printed = await sendLocalPrintJob({
+        printer: verifiedPrinter,
+        title: payload.title || "Baebe Boo counter receipt",
+        jobBase64: payload.jobBase64,
+      });
+      setReceiptNotice(`Receipt sent to ${printed.printer} (${printed.jobId}).`);
     } catch (printError) {
       setReceiptError(printError instanceof Error ? printError.message : "The receipt could not be printed.");
     } finally {
@@ -313,7 +328,8 @@ export default function CounterSalesWorkspace() {
             )}
             <CounterPrinterSetup
               open={printerSetupOpen}
-              onVerified={() => {
+              onVerified={(printer) => {
+                setVerifiedPrinter(printer);
                 setPrinterSetupOpen(false);
                 setReceiptError("");
                 setReceiptNotice("Printer verified. Press print again to send this receipt.");
@@ -336,7 +352,7 @@ export default function CounterSalesWorkspace() {
               Download PDF copy
             </a>
             <p className="text-xs leading-5 text-[var(--color-ink-soft)]">
-              Sends a native 80 mm receipt job with a 160 mm minimum height and QR code directly to the verified host queue. The PDF copy
+              Sends a native 80 mm receipt job with a 160 mm minimum height and QR code through this workstation&apos;s verified local printer. The PDF copy
               is only for download or troubleshooting.
             </p>
           </div>
