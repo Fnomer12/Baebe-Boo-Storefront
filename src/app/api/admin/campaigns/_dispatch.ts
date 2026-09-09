@@ -9,6 +9,7 @@ import {
   RESEND_BATCH_LIMIT,
 } from "@/domain/crm/campaign-send";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { isSmsDeliveryConfigured } from "@/lib/sms";
 
 /**
  * One implementation of "send the next batch of this campaign", shared by the
@@ -76,7 +77,8 @@ export async function dispatchCampaignBatch(
     // Nothing left. Close the campaign off if it has an audience at all — a
     // campaign with no recipients is not "sent", it was never built.
     const total = await countRecipients(campaignId);
-    if (total > 0) {
+    const smsRemaining = isSmsDeliveryConfigured() ? await countSmsPending(campaignId) : 0;
+    if (total > 0 && smsRemaining === 0) {
       await updateCampaign(campaignId, {
         status: "sent",
         sent_at: new Date().toISOString(),
@@ -84,6 +86,16 @@ export async function dispatchCampaignBatch(
         last_error: null,
       });
       return { sent: 0, remaining: 0, simulated: false, status: "sent", message: null };
+    }
+
+    if (total > 0 && smsRemaining > 0) {
+      return {
+        sent: 0,
+        remaining: 0,
+        simulated: false,
+        status: "ready",
+        message: `${smsRemaining} SMS still queued.`,
+      };
     }
 
     /**
@@ -183,6 +195,7 @@ export async function dispatchCampaignBatch(
       ? `The email provider accepted ${accepted.length} of ${batch.length} messages. The other ${unconfirmed} are still queued and will be retried.`
       : null;
 
+  const smsRemaining = isSmsDeliveryConfigured() ? await countSmsPending(campaignId) : 0;
   await updateCampaign(campaignId, {
     audience_count: total,
     last_error: message,
@@ -190,15 +203,16 @@ export async function dispatchCampaignBatch(
     // Only a campaign with nothing left pending is finished. A batch that was
     // partly rejected leaves `remaining > 0`, so it stays `ready` and the next
     // tick picks the rest up.
-    ...(remaining === 0 ? { status: "sent", sent_at: stampedAt } : {}),
+    ...(remaining === 0 && smsRemaining === 0 ? { status: "sent", sent_at: stampedAt } : {}),
   });
 
   return {
     sent: accepted.length,
     remaining,
     simulated: false,
-    status: remaining === 0 ? "sent" : "ready",
-    message,
+    status: remaining === 0 && smsRemaining === 0 ? "sent" : "ready",
+    message:
+      message || (remaining === 0 && smsRemaining > 0 ? `${smsRemaining} SMS still queued.` : null),
   };
 }
 
@@ -344,6 +358,17 @@ export async function dispatchSmsCampaignBatch(
   if (stampError) throw new Error(`${stampedIds.length} SMS were sent but could not be marked as sent (${stampError.message}).`);
 
   const remaining = await countSmsPending(campaignId);
+  if (remaining === 0) {
+    const emailRemaining = await countPending(campaignId);
+    if (emailRemaining === 0) {
+      await updateCampaign(campaignId, {
+        status: "sent",
+        sent_at: now.toISOString(),
+        last_error: null,
+        last_attempted_at: now.toISOString(),
+      });
+    }
+  }
   return {
     sent: stampedIds.length,
     remaining,

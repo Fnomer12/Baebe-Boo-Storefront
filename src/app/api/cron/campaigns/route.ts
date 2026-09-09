@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { creditBirthdays } from "@/app/api/admin/campaigns/_birthday-credits";
-import { CAMPAIGN_BATCH_SIZE, dispatchCampaignBatch } from "@/app/api/admin/campaigns/_dispatch";
+import {
+  CAMPAIGN_BATCH_SIZE,
+  dispatchCampaignBatch,
+  dispatchSmsCampaignBatch,
+} from "@/app/api/admin/campaigns/_dispatch";
 
 /**
  * The scheduled campaign dispatcher.
@@ -83,6 +87,8 @@ export async function GET(request: Request) {
 
   let sent = 0;
   let remaining = 0;
+  let smsSent = 0;
+  let smsRemaining = 0;
   const campaigns: {
     id: string;
     name: string;
@@ -90,39 +96,56 @@ export async function GET(request: Request) {
     remaining: number;
     simulated: boolean;
     message: string | null;
+    smsSent: number;
+    smsRemaining: number;
+    smsMessage: string | null;
   }[] = [];
 
   for (const campaign of due || []) {
+    let emailResult: Awaited<ReturnType<typeof dispatchCampaignBatch>> | null = null;
+    let emailError: string | null = null;
     try {
-      const result = await dispatchCampaignBatch(
+      emailResult = await dispatchCampaignBatch(
         campaign.id,
         campaign.campaign_type,
         CAMPAIGN_BATCH_SIZE,
       );
-      sent += result.sent;
-      remaining += result.remaining;
-      campaigns.push({
-        id: campaign.id,
-        name: campaign.name,
-        sent: result.sent,
-        remaining: result.remaining,
-        simulated: result.simulated,
-        message: result.message,
-      });
     } catch (error) {
-      // One broken campaign must not stop the others; the next tick retries it.
-      campaigns.push({
-        id: campaign.id,
-        name: campaign.name,
-        sent: 0,
-        remaining: 0,
-        simulated: false,
-        message: error instanceof Error ? error.message : "Dispatch failed.",
-      });
+      emailError = error instanceof Error ? error.message : "Dispatch failed.";
     }
+
+    let smsResult: Awaited<ReturnType<typeof dispatchSmsCampaignBatch>> | null = null;
+    let smsError: string | null = null;
+    try {
+      smsResult = await dispatchSmsCampaignBatch(
+        campaign.id,
+        campaign.campaign_type,
+        CAMPAIGN_BATCH_SIZE,
+      );
+    } catch (error) {
+      smsError = error instanceof Error ? error.message : "SMS dispatch failed.";
+    }
+
+    // One broken channel must not prevent the other from reaching customers;
+    // the next tick retries whichever work list remains queued.
+    sent += emailResult?.sent || 0;
+    remaining += emailResult?.remaining || 0;
+    smsSent += smsResult?.sent || 0;
+    smsRemaining += smsResult?.remaining || 0;
+    campaigns.push({
+      id: campaign.id,
+      name: campaign.name,
+      sent: emailResult?.sent || 0,
+      remaining: emailResult?.remaining || 0,
+      simulated: emailResult?.simulated || false,
+      message: emailError || emailResult?.message || null,
+      smsSent: smsResult?.sent || 0,
+      smsRemaining: smsResult?.remaining || 0,
+      smsMessage: smsError || smsResult?.message || null,
+    });
   }
 
-  return NextResponse.json({ sent, remaining, campaigns, credits, creditError });
+  return NextResponse.json({ sent, remaining, smsSent, smsRemaining, campaigns, credits, creditError });
 }
 
 /**
