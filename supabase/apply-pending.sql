@@ -978,3 +978,10 @@ alter table public.campaign_recipients
 create index if not exists campaign_recipients_sms_pending_idx
   on public.campaign_recipients (campaign_id)
   where sms_sent_at is null;
+
+-- 20260909_sms_notifications.sql
+alter table public.orders
+  add column if not exists confirmation_sms_sent_at timestamptz;
+create index if not exists orders_confirmation_sms_pending_idx
+  on public.orders (id)
+  where confirmation_sms_sent_at is null;

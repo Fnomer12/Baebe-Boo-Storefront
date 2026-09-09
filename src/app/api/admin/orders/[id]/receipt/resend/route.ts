@@ -42,6 +42,8 @@ export async function POST(
   return NextResponse.json({
     sent: true,
     simulated: outcome.simulated,
+    smsSent: outcome.smsSent ?? false,
+    smsError: outcome.smsError ?? null,
     attachmentFailed: outcome.attachmentFailed ?? null,
   });
 }

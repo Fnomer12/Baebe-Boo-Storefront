@@ -2,7 +2,13 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { isEmailDeliveryConfigured, sendEmail } from "@/lib/email";
-import { loginCodeTemplate, staffLoginRedirectTemplate } from "@/lib/email/templates";
+import {
+  loginCodeSmsTemplate,
+  loginCodeTemplate,
+  staffLoginRedirectSmsTemplate,
+  staffLoginRedirectTemplate,
+} from "@/lib/email/templates";
+import { isSmsDeliveryConfigured, normalizeGhanaPhone, sendSms } from "@/lib/sms";
 import { completeCustomerSignIn } from "@/lib/auth/post-sign-in";
 import {
   generateLoginCode,
@@ -37,7 +43,7 @@ export type VerifyLoginCodeResult =
  * not depend on the address (misconfiguration) surface as a distinct result.
  */
 export async function requestLoginCode(email: string, requestIp: string | null): Promise<RequestLoginCodeResult> {
-  if (!isSupabaseAdminConfigured || !isEmailDeliveryConfigured()) {
+  if (!isSupabaseAdminConfigured || (!isEmailDeliveryConfigured() && !isSmsDeliveryConfigured())) {
     return { status: "unavailable" };
   }
 
@@ -56,7 +62,15 @@ export async function requestLoginCode(email: string, requestIp: string | null):
   if (staff === "staff") {
     // Tell the mailbox owner where to sign in, but never tell the caller.
     const staffMail = staffLoginRedirectTemplate();
-    await sendEmail(normalized, staffMail.subject, staffMail.html).catch(() => undefined);
+    const phone = await phoneForEmail(normalized);
+    await Promise.all([
+      isEmailDeliveryConfigured()
+        ? sendEmail(normalized, staffMail.subject, staffMail.html).catch(() => undefined)
+        : Promise.resolve(),
+      phone && isSmsDeliveryConfigured()
+        ? sendSms(phone, staffLoginRedirectSmsTemplate()).catch(() => undefined)
+        : Promise.resolve(),
+    ]);
     return suppressed;
   }
 
@@ -78,12 +92,24 @@ export async function requestLoginCode(email: string, requestIp: string | null):
   if (!outcome || outcome.status !== "issued") return suppressed;
 
   const mail = loginCodeTemplate(code, Math.round(loginCodeTtlSeconds / 60));
-  const delivery = await sendEmail(normalized, mail.subject, mail.html);
+  const expiryMinutes = Math.round(loginCodeTtlSeconds / 60);
+  const phone = await phoneForEmail(normalized);
+  const [emailDelivery, smsDelivery] = await Promise.all([
+    isEmailDeliveryConfigured()
+      ? sendEmail(normalized, mail.subject, mail.html)
+      : Promise.resolve({ sent: false as const, error: "Email is not configured." }),
+    phone && isSmsDeliveryConfigured()
+      ? sendSms(phone, loginCodeSmsTemplate(code, expiryMinutes))
+      : Promise.resolve({ sent: false as const, error: "SMS is not configured or no phone is on file." }),
+  ]);
 
   // A simulated send is a success that delivers nothing. Telling someone to
   // check an inbox that will never receive anything is the exact failure this
-  // flow replaces, so treat it as hard breakage rather than quiet success.
-  if (!delivery.sent || delivery.simulated) {
+  // flow replaces, so treat it as hard breakage rather than quiet success. A
+  // real SMS is an equally valid delivery path when email is unavailable.
+  const emailDelivered = emailDelivery.sent && !emailDelivery.simulated;
+  const smsDelivered = smsDelivery.sent && !smsDelivery.simulated;
+  if (!emailDelivered && !smsDelivered) {
     await invalidate(requestId);
     return { status: "unavailable" };
   }
@@ -94,6 +120,25 @@ export async function requestLoginCode(email: string, requestIp: string | null):
     expiresInSeconds: loginCodeTtlSeconds,
     resendAfterSeconds: loginCodeResendSeconds,
   };
+}
+
+/** Find the best-known phone for an email without exposing it to the client. */
+async function phoneForEmail(email: string): Promise<string | null> {
+  const [{ data: profile }, { data: member }] = await Promise.all([
+    supabaseAdmin
+      .from("customer_profiles")
+      .select("phone")
+      .eq("email", email)
+      .limit(1)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("members")
+      .select("phone")
+      .eq("email", email)
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  return normalizeGhanaPhone(profile?.phone || member?.phone);
 }
 
 export async function verifyLoginCode(

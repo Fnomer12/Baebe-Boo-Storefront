@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { authorizeAdminApi } from "@/lib/auth";
 import { isEmailDeliveryConfigured, sendEmail } from "@/lib/email";
+import { isSmsDeliveryConfigured, normalizeGhanaPhone, sendSms } from "@/lib/sms";
+import { birthdaySmsTemplate } from "@/lib/email/templates";
 import { campaignTokens, personalize, personalizeHtml } from "@/domain/crm/campaign-send";
 import { campaignTemplate } from "../_dispatch";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
  * Send one copy of the campaign email to the signed-in admin.
@@ -28,7 +31,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!isEmailDeliveryConfigured()) {
+  if (!isEmailDeliveryConfigured() && !isSmsDeliveryConfigured()) {
     return NextResponse.json(
       {
         message:
@@ -53,22 +56,34 @@ export async function POST(request: Request) {
   });
 
   const template = campaignTemplate("birthday");
-  const result = await sendEmail(
-    recipient,
-    `[Test] ${personalize(template.subject, tokens)}`,
-    personalizeHtml(template.html, tokens),
-  );
+  const { data: profile } = await supabaseAdmin
+    .from("customer_profiles")
+    .select("phone")
+    .eq("email", recipient)
+    .limit(1)
+    .maybeSingle();
+  const phone = normalizeGhanaPhone(profile?.phone);
+  const [emailResult, smsResult] = await Promise.all([
+    isEmailDeliveryConfigured()
+      ? sendEmail(
+          recipient,
+          `[Test] ${personalize(template.subject, tokens)}`,
+          personalizeHtml(template.html, tokens),
+        )
+      : Promise.resolve({ sent: false as const, error: "Email is not configured." }),
+    phone && isSmsDeliveryConfigured()
+      ? sendSms(phone, personalize(birthdaySmsTemplate(), tokens))
+      : Promise.resolve({ sent: false as const, error: "SMS is not configured or no phone is on file." }),
+  ]);
 
-  if (!result.sent) {
-    return NextResponse.json({ message: result.error }, { status: 502 });
-  }
-  if (result.simulated) {
-    // Same rule as a real send: a simulated success is not a success.
+  const emailSent = emailResult.sent && !emailResult.simulated;
+  const smsSent = smsResult.sent && !smsResult.simulated;
+  if (!emailSent && !smsSent) {
     return NextResponse.json(
-      { message: "The email provider is not really configured, so nothing was sent." },
-      { status: 503 },
+      { message: [!emailResult.sent ? emailResult.error : null, !smsResult.sent ? smsResult.error : null].filter(Boolean).join(" ") || "Nothing was sent." },
+      { status: 502 },
     );
   }
 
-  return NextResponse.json({ sent: true, to: recipient });
+  return NextResponse.json({ sent: true, emailSent, smsSent, to: recipient, smsTo: smsSent ? phone : null });
 }

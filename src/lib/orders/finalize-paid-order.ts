@@ -65,6 +65,12 @@ export async function finalizeVerifiedOrder(orderId: string, providerReference: 
       orderId,
     });
   }
+  if (confirmation.status === "sent" && confirmation.smsError) {
+    console.error("finalizeVerifiedOrder: order SMS notification failed", {
+      orderId,
+      reason: confirmation.smsError,
+    });
+  }
 
   // The order is now paid and counted in `orders`, but the profit report reads
   // a materialized snapshot — without this the dashboard reports revenue the
