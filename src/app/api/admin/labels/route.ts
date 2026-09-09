@@ -1,7 +1,13 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { slugify } from "@/components/storefront/catalog-data";
 import { authorizeAdminApi } from "@/lib/auth";
+import {
+  buildNativeCalibrationJob,
+  buildNativeLabelJob,
+  printNativeJob,
+} from "@/lib/labels/native-print";
 import {
   labelFilename,
   labelQrPayload,
@@ -22,6 +28,10 @@ const bodySchema = z.object({
   items: z.array(itemSchema).min(1).max(100).optional(),
   /** Print the calibration page instead of labels. */
   calibration: z.boolean().optional(),
+  /** Send the generated PDF directly to the laptop's configured CUPS queue. */
+  print: z.boolean().optional(),
+  /** Queue selected and verified by the printer setup flow. */
+  printer: z.string().trim().min(1).max(128).optional(),
 });
 
 function siteUrl(): string {
@@ -46,7 +56,7 @@ function variantLabel(optionValues: unknown, title: string): string {
 }
 
 /**
- * Shelf-label PDFs for the thermal printer (XP-365B, 50×30mm).
+ * Shelf-label PDFs for the thermal printer (XP-365B, 30×50mm).
  *
  * Read-only export gated on `catalog:read`: nothing is written, but the rows
  * carry internal SKUs. At most 200 stickers per request — a bigger catalogue
@@ -63,6 +73,10 @@ export async function POST(request: Request) {
 
   try {
     if (parsed.data.calibration) {
+      if (parsed.data.print) {
+        const result = await printNativeJob(buildNativeCalibrationJob(), "Baebe Boo label calibration");
+        return NextResponse.json({ printed: true, ...result });
+      }
       const pdf = await renderLabelCalibrationPdf();
       return new NextResponse(new Uint8Array(pdf), {
         headers: {
@@ -120,6 +134,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "No printable versions found for that selection." }, { status: 400 });
     }
 
+    if (parsed.data.print) {
+      const printer = parsed.data.printer?.trim();
+      const verifiedPrinter = (await cookies()).get("baebe_printer_verified")?.value;
+      if (!printer || verifiedPrinter !== printer) {
+        return NextResponse.json(
+          { message: "Connect the printer and complete its test page before printing labels." },
+          { status: 428 },
+        );
+      }
+      const result = await printNativeJob(
+        buildNativeLabelJob(labels.slice(0, 200)),
+        "Baebe Boo shelf labels",
+        printer,
+      );
+      return NextResponse.json({ printed: true, ...result, count: Math.min(labels.length, 200) });
+    }
     const pdf = await renderShelfLabelsPdf(labels.slice(0, 200));
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
@@ -130,7 +160,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Labels could not be generated.";
-    const status = /missing|fonts/i.test(message) ? 503 : 500;
+    const status = /missing|fonts|printer|cups|exited|configured/i.test(message) ? 503 : 500;
     return NextResponse.json({ message }, { status });
   }
 }

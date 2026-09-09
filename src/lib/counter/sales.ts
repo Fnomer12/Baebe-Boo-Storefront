@@ -229,6 +229,28 @@ export async function getCounterSaleReceipt(
 }
 
 /**
+ * Load an in-store receipt after its signed QR link has been verified.
+ *
+ * This intentionally accepts only the order number and keeps the query scoped
+ * to in-store orders. The caller must verify the QR token before calling it.
+ */
+export async function getPublicCounterSaleReceipt(orderNumber: string): Promise<CounterSaleReceipt> {
+  requireAdminClient();
+
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select(`${ORDER_COLUMNS}, shop_id`)
+    .eq("order_number", orderNumber)
+    .eq("order_type", "instore")
+    .maybeSingle();
+  if (error) databaseFailure("The digital receipt could not be loaded.");
+  if (!data) notFound("Digital receipt not found.");
+
+  const row = data as unknown as OrderRow & { shop_id: string };
+  return getCounterSaleReceipt(row.shop_id, "", row.id);
+}
+
+/**
  * Ring up a sale.
  *
  * Unlike the reads above this uses the **cookie-scoped** client on purpose.

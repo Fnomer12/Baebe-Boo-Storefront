@@ -8,6 +8,7 @@ import {
   counterReceiptFilename,
   renderCounterReceiptPdf,
 } from "@/lib/pdf/counter-receipt-pdf";
+import { counterReceiptUrl } from "@/lib/counter/receipt-link";
 
 const PAYMENT_LABEL: Record<string, string> = {
   cash: "Cash",
@@ -16,7 +17,7 @@ const PAYMENT_LABEL: Record<string, string> = {
 };
 
 /**
- * 72mm till receipt PDF for the XP-365B in receipt mode.
+ * 80mm till receipt PDF for the XP-365B in receipt mode.
  *
  * Shop-scoped like the JSON receipt: the sale must belong to the cashier's
  * own shop, and the shop header is read from that same shop row — never from
@@ -59,6 +60,7 @@ export async function GET(
         lineTotal: line.lineTotal,
       })),
       total: sale.total,
+      receiptUrl: counterReceiptUrl(sale.orderNumber),
     });
 
     return new NextResponse(new Uint8Array(pdf), {

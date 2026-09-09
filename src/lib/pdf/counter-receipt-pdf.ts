@@ -1,14 +1,15 @@
 import "server-only";
 
 import PDFDocument from "pdfkit";
+import bwipjs from "bwip-js";
 import { formatCedis } from "@/domain/money";
 import { loadReceiptAssets } from "@/lib/pdf/receipt-assets";
 
 /**
  * Till receipt for the XP-365B in receipt mode (continuous 80mm roll).
  *
- * Content is 72mm wide — inside the printer's 76mm max with room for the
- * driver's own margins. Length is exact: the layout is measured first on a
+ * Content is 74mm wide — inside an 80mm roll with room for the driver's own
+ * margins. Length is exact: the layout is measured first on a
  * scratch document, then rendered onto a page of precisely that height, so
  * the cutter lands right under the footer instead of feeding blank paper.
  *
@@ -17,14 +18,13 @@ import { loadReceiptAssets } from "@/lib/pdf/receipt-assets";
  * "GH 360.75" on a customer's receipt is a defect, not a cosmetic choice.
  */
 
-const CONTENT_WIDTH_MM = 72;
+const CONTENT_WIDTH_MM = 74;
 const MM_TO_PT = 25.4 / 72;
 const CONTENT_WIDTH = CONTENT_WIDTH_MM / MM_TO_PT;
-// Whole page is 76mm: the XP-365B's max. Content 72mm + 2mm margins each
-// side. A wider page makes the driver scale-to-fit and shrinks everything;
-// a narrower one clips the totals column.
-const PAGE_WIDTH = 76 / MM_TO_PT;
-const MARGIN = 2 / MM_TO_PT;
+// Whole page is 80mm. Content is 74mm + 3mm margins each side so the
+// receipt stays readable on the larger continuous roll.
+const PAGE_WIDTH = 80 / MM_TO_PT;
+const MARGIN = 3 / MM_TO_PT;
 
 export type CounterReceiptLine = {
   productName: string;
@@ -43,7 +43,18 @@ export type CounterReceiptData = {
   paymentLabel: string;
   lines: CounterReceiptLine[];
   total: number;
+  receiptUrl?: string;
 };
+
+async function qrPng(text: string): Promise<Buffer> {
+  return bwipjs.toBuffer({
+    bcid: "qrcode",
+    text,
+    eclevel: "M",
+    scale: 4,
+    includetext: false,
+  });
+}
 
 export function counterReceiptFilename(orderNumber: string): string {
   const safe = orderNumber.replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "receipt";
@@ -77,7 +88,9 @@ type MeasuredBlock =
   | { kind: "text"; text: string; size: number; bold: boolean; align: "left" | "center"; color: string; maxLines?: number }
   | { kind: "rule" }
   | { kind: "gap"; height: number }
-  | { kind: "line"; name: string; variant: string; qtyLine: string; total: string };
+  | { kind: "spacer" }
+  | { kind: "line"; name: string; variant: string; qtyLine: string; total: string }
+  | { kind: "qr"; url: string };
 
 function plan(data: CounterReceiptData): MeasuredBlock[] {
   const blocks: MeasuredBlock[] = [
@@ -87,15 +100,23 @@ function plan(data: CounterReceiptData): MeasuredBlock[] {
     blocks.push({ kind: "text", text: data.shopLocation, size: 8, bold: false, align: "center", color: "#555555" });
   }
   blocks.push(
-    { kind: "gap", height: 4 },
+    { kind: "gap", height: 8 },
     { kind: "rule" },
-    { kind: "gap", height: 4 },
-    { kind: "text", text: `Receipt ${data.orderNumber}`, size: 9, bold: true, align: "left", color: "#111111" },
+    { kind: "gap", height: 8 },
+    { kind: "text", text: "IN-STORE RECEIPT", size: 10, bold: true, align: "center", color: "#111111" },
+    { kind: "gap", height: 6 },
+    { kind: "text", text: `Order ${data.orderNumber}`, size: 9, bold: true, align: "left", color: "#111111" },
   );
   const soldAt = formatSoldAt(data.soldAt);
   if (soldAt) blocks.push({ kind: "text", text: soldAt, size: 8, bold: false, align: "left", color: "#555555" });
   blocks.push({ kind: "text", text: data.customerName || "Walk-in Customer", size: 8, bold: false, align: "left", color: "#555555" });
-  blocks.push({ kind: "gap", height: 4 }, { kind: "rule" }, { kind: "gap", height: 4 });
+  blocks.push(
+    { kind: "gap", height: 8 },
+    { kind: "rule" },
+    { kind: "gap", height: 8 },
+    { kind: "text", text: "ITEMS", size: 10, bold: true, align: "left", color: "#111111" },
+    { kind: "gap", height: 4 },
+  );
   for (const line of data.lines) {
     blocks.push({
       kind: "line",
@@ -106,11 +127,26 @@ function plan(data: CounterReceiptData): MeasuredBlock[] {
     });
   }
   blocks.push(
-    { kind: "gap", height: 2 },
-    { kind: "rule" },
-    { kind: "gap", height: 4 },
-    { kind: "text", text: `${data.paymentLabel}  ·  TOTAL  ${formatCedis(data.total)}`, size: 11, bold: true, align: "left", color: "#111111" },
     { kind: "gap", height: 6 },
+    { kind: "rule" },
+    { kind: "gap", height: 6 },
+    { kind: "text", text: `Payment  ${data.paymentLabel}`, size: 9, bold: false, align: "left", color: "#555555" },
+    { kind: "text", text: `TOTAL  ${formatCedis(data.total)}`, size: 14, bold: true, align: "left", color: "#111111" },
+  );
+  blocks.push(
+    { kind: "gap", height: 10 },
+    { kind: "spacer" },
+    { kind: "text", text: "DIGITAL RECEIPT", size: 9, bold: true, align: "center", color: "#111111" },
+  );
+  if (data.receiptUrl) {
+    blocks.push(
+      { kind: "gap", height: 4 },
+      { kind: "qr", url: data.receiptUrl },
+      { kind: "text", text: "Scan to save a copy on your phone", size: 8, bold: false, align: "center", color: "#111111" },
+    );
+  }
+  blocks.push(
+    { kind: "gap", height: 8 },
     { kind: "text", text: "Thank you for shopping with Baebe Boo.", size: 8, bold: false, align: "center", color: "#111111" },
     { kind: "text", text: "Exchanges within 7 days with this receipt.", size: 7.5, bold: false, align: "center", color: "#555555" },
   );
@@ -127,6 +163,10 @@ function measure(blocks: MeasuredBlock[]): number {
   for (const block of blocks) {
     if (block.kind === "gap") {
       height += block.height;
+    } else if (block.kind === "spacer") {
+      // Filled at render time when the receipt is shorter than the 160 mm
+      // minimum. This keeps the QR/footer in the lower section of the roll.
+      continue;
     } else if (block.kind === "rule") {
       height += 1 + 2;
     } else if (block.kind === "line") {
@@ -135,6 +175,8 @@ function measure(blocks: MeasuredBlock[]): number {
       height += Math.min(nameHeight, 9 * 1.15 * 2);
       if (block.variant) height += 7.5 * 1.15;
       height += 8.5 * 1.15 + 5;
+    } else if (block.kind === "qr") {
+      height += 24 / MM_TO_PT + 4;
     } else {
       probe.font(block.bold ? "bold" : "regular").fontSize(block.size);
       const lines = block.maxLines ?? 99;
@@ -149,7 +191,7 @@ export async function renderCounterReceiptPdf(data: CounterReceiptData): Promise
   if (data.lines.length === 0) throw new Error("A receipt needs at least one line.");
   const assets = loadReceiptAssets();
   const blocks = plan(data);
-  const pageHeight = Math.max(120, measure(blocks));
+  const pageHeight = Math.max(160 / MM_TO_PT, measure(blocks));
 
   const doc = new PDFDocument({
     size: [PAGE_WIDTH, pageHeight],
@@ -168,6 +210,9 @@ export async function renderCounterReceiptPdf(data: CounterReceiptData): Promise
   for (const block of blocks) {
     if (block.kind === "gap") {
       cursor += block.height;
+    } else if (block.kind === "spacer") {
+      const footerReserve = data.receiptUrl ? 52 / MM_TO_PT : 27 / MM_TO_PT;
+      cursor += Math.max(0, pageHeight - MARGIN - footerReserve - cursor);
     } else if (block.kind === "rule") {
       drawRule();
     } else if (block.kind === "line") {
@@ -188,6 +233,14 @@ export async function renderCounterReceiptPdf(data: CounterReceiptData): Promise
       doc.font("bold").fontSize(9);
       doc.text(block.total, MARGIN, cursor, { width: CONTENT_WIDTH, align: "right", lineBreak: false });
       cursor += 8.5 * 1.15 + 5;
+    } else if (block.kind === "qr") {
+      const qr = await qrPng(block.url);
+      const qrSize = 24 / MM_TO_PT;
+      doc.image(qr, MARGIN + (CONTENT_WIDTH - qrSize) / 2, cursor, {
+        width: qrSize,
+        height: qrSize,
+      });
+      cursor += qrSize + 4;
     } else {
       doc.font(block.bold ? "bold" : "regular").fontSize(block.size).fillColor(block.color);
       const options: { width: number; align: "left" | "center"; lineBreak?: boolean; ellipsis?: boolean } =

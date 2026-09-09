@@ -23,6 +23,7 @@ const MM_TO_PT = 25.4 / 72;
 
 export const LABEL_SIZES = {
   "50x30": { widthMm: 50, heightMm: 30 },
+  "30x50": { widthMm: 30, heightMm: 50 },
 } as const;
 
 export type LabelSizeId = keyof typeof LABEL_SIZES;
@@ -90,7 +91,7 @@ async function code128Png(text: string): Promise<Buffer> {
  */
 export async function renderShelfLabelsPdf(
   labels: ShelfLabel[],
-  sizeId: LabelSizeId = "50x30",
+  sizeId: LabelSizeId = "30x50",
 ): Promise<Buffer> {
   if (labels.length === 0) throw new Error("At least one label is required.");
   if (labels.length > 200) throw new Error("Print at most 200 labels at a time.");
@@ -108,37 +109,94 @@ export async function renderShelfLabelsPdf(
   doc.registerFont("bold", assets.bold);
 
   const margin = 2 / MM_TO_PT;
-  // QR almost full-height on the left; text stacks on the right.
-  const qrSize = pageHeight - margin * 2;
-  const textX = margin + qrSize + 2.5 / MM_TO_PT;
-  const textWidth = pageWidth - textX - margin;
+  const portrait = heightMm > widthMm;
 
   for (const [index, label] of labels.entries()) {
     if (index > 0) doc.addPage({ size: [pageWidth, pageHeight], margins: { top: 0, bottom: 0, left: 0, right: 0 } });
 
     const qr = await qrPng(label.url);
-    doc.image(qr, margin, margin, { width: qrSize, height: qrSize });
+    if (portrait) {
+      // A 12mm QR leaves the upper-right zone free for a clear scan prompt.
+      // Product copy then gets the full label width below the QR instead of
+      // being squeezed into a narrow column or printed over the code.
+      const qrSize = 12 / MM_TO_PT;
+      const qrX = margin;
+      const qrY = 12;
+      const textWidth = pageWidth - margin * 2;
+      doc.font("bold").fontSize(5.2).fillColor("#111111");
+      doc.text(label.shopName.toUpperCase(), margin, 2.5, {
+        width: textWidth,
+        lineBreak: false,
+        ellipsis: true,
+      });
+      doc.image(qr, qrX, qrY, { width: qrSize, height: qrSize });
 
-    let cursor = margin + 1;
-    const line = (text: string, size: number, font: "regular" | "bold", gapAfter = 1.2) => {
-      doc.font(font).fontSize(size).fillColor("#111111");
-      doc.text(text, textX, cursor, { width: textWidth, lineBreak: false, ellipsis: true });
-      cursor += size * 1.15 + gapAfter;
-    };
+      const sideX = margin + qrSize + 3 / MM_TO_PT;
+      const sideWidth = pageWidth - sideX - margin;
+      doc.font("bold").fontSize(5.2).fillColor("#111111");
+      doc.text("SCAN QR", sideX, qrY + 4, { width: sideWidth, lineBreak: false, ellipsis: true });
+      doc.font("regular").fontSize(5.2).fillColor("#444444");
+      doc.text("FOR PRODUCT", sideX, qrY + 12, { width: sideWidth, lineBreak: false, ellipsis: true });
 
-    line(label.shopName.toUpperCase(), 5.5, "bold");
-    // Name gets two lines; everything else one.
-    doc.font("bold").fontSize(7.5).fillColor("#111111");
-    const nameHeight = doc.heightOfString(label.productName, { width: textWidth });
-    const nameLines = Math.min(2, Math.max(1, Math.round(nameHeight / (7.5 * 1.15))));
-    doc.text(label.productName, textX, cursor, { width: textWidth, height: 7.5 * 1.15 * nameLines, ellipsis: true });
-    cursor += 7.5 * 1.15 * nameLines + 1;
-    if (label.variantLabel) line(label.variantLabel, 6, "regular", 1);
-    doc.font("bold").fontSize(11.5).fillColor("#111111");
-    doc.text(formatCedis(label.price), textX, cursor, { width: textWidth, lineBreak: false });
-    cursor += 11.5 * 1.15 + 1;
-    doc.font("regular").fontSize(5.5).fillColor("#444444");
-    doc.text(label.sku, textX, cursor, { width: textWidth, lineBreak: false });
+      const dividerY = qrY + qrSize + 2.5 / MM_TO_PT;
+      doc.moveTo(margin, dividerY).lineTo(pageWidth - margin, dividerY).lineWidth(0.5).stroke("#999999");
+      let cursor = dividerY + 3;
+      doc.font("bold").fontSize(6.8).fillColor("#111111");
+      const nameHeight = doc.heightOfString(label.productName, { width: textWidth });
+      const nameLines = Math.min(3, Math.max(1, Math.round(nameHeight / (6.8 * 1.15))));
+      doc.text(label.productName, margin, cursor, {
+        width: textWidth,
+        height: 6.8 * 1.15 * nameLines,
+        ellipsis: true,
+      });
+      cursor += 6.8 * 1.15 * nameLines + 1;
+      if (label.variantLabel) {
+        doc.font("regular").fontSize(5.2).fillColor("#444444");
+        doc.text(label.variantLabel, margin, cursor, { width: textWidth, lineBreak: false, ellipsis: true });
+        cursor += 5.2 * 1.15 + 1;
+      }
+      doc.font("bold").fontSize(9).fillColor("#111111");
+      doc.text(formatCedis(label.price), margin, cursor, { width: textWidth, lineBreak: false });
+
+      const barcode = await code128Png(label.sku);
+      const barcodeY = pageHeight - margin - 8 / MM_TO_PT - 12;
+      doc.image(barcode, margin, barcodeY, {
+        width: textWidth,
+        height: 8 / MM_TO_PT,
+      });
+      doc.font("regular").fontSize(4.8).fillColor("#444444");
+      doc.text(`SKU ${label.sku}`, margin, barcodeY + 9 / MM_TO_PT, {
+        width: textWidth,
+        lineBreak: false,
+        ellipsis: true,
+      });
+    } else {
+      // QR almost full-height on the left; text stacks on the right.
+      const qrSize = pageHeight - margin * 2;
+      const textX = margin + qrSize + 2.5 / MM_TO_PT;
+      const textWidth = pageWidth - textX - margin;
+      doc.image(qr, margin, margin, { width: qrSize, height: qrSize });
+
+      let cursor = margin + 1;
+      const line = (text: string, size: number, font: "regular" | "bold", gapAfter = 1.2) => {
+        doc.font(font).fontSize(size).fillColor("#111111");
+        doc.text(text, textX, cursor, { width: textWidth, lineBreak: false, ellipsis: true });
+        cursor += size * 1.15 + gapAfter;
+      };
+
+      line(label.shopName.toUpperCase(), 5.5, "bold");
+      doc.font("bold").fontSize(7.5).fillColor("#111111");
+      const nameHeight = doc.heightOfString(label.productName, { width: textWidth });
+      const nameLines = Math.min(2, Math.max(1, Math.round(nameHeight / (7.5 * 1.15))));
+      doc.text(label.productName, textX, cursor, { width: textWidth, height: 7.5 * 1.15 * nameLines, ellipsis: true });
+      cursor += 7.5 * 1.15 * nameLines + 1;
+      if (label.variantLabel) line(label.variantLabel, 6, "regular", 1);
+      doc.font("bold").fontSize(11.5).fillColor("#111111");
+      doc.text(formatCedis(label.price), textX, cursor, { width: textWidth, lineBreak: false });
+      cursor += 11.5 * 1.15 + 1;
+      doc.font("regular").fontSize(5.5).fillColor("#444444");
+      doc.text(label.sku, textX, cursor, { width: textWidth, lineBreak: false });
+    }
   }
 
   return collect(doc);
@@ -150,7 +208,7 @@ export async function renderShelfLabelsPdf(
  * XP-365B — if the border measures 50×30mm and the phone scans both codes,
  * the batch will be right.
  */
-export async function renderLabelCalibrationPdf(sizeId: LabelSizeId = "50x30"): Promise<Buffer> {
+export async function renderLabelCalibrationPdf(sizeId: LabelSizeId = "30x50"): Promise<Buffer> {
   const assets = loadReceiptAssets();
   const { widthMm, heightMm } = LABEL_SIZES[sizeId];
   const pageWidth = widthMm / MM_TO_PT;
@@ -164,7 +222,7 @@ export async function renderLabelCalibrationPdf(sizeId: LabelSizeId = "50x30"): 
   doc.registerFont("regular", assets.regular);
   doc.registerFont("bold", assets.bold);
 
-  // True-size border: measure this with a ruler. 50×30 or the driver scaled it.
+  // True-size border: measure this with a ruler. 30×50 or the driver scaled it.
   doc.rect(1, 1, pageWidth - 2, pageHeight - 2).lineWidth(0.75).stroke("#111111");
 
   // Millimetre ruler along the top edge.
@@ -177,14 +235,31 @@ export async function renderLabelCalibrationPdf(sizeId: LabelSizeId = "50x30"): 
   }
 
   const qr = await qrPng("https://baebe-boo.jtechinnovations.tech/products/calibration-test?sku=TEST-SKU");
-  const qrSize = 15 / MM_TO_PT;
-  doc.image(qr, 4, 12, { width: qrSize, height: qrSize });
+  const portrait = heightMm > widthMm;
+  const qrSize = (portrait ? 18 : 15) / MM_TO_PT;
+  if (portrait) {
+    const qrX = (pageWidth - qrSize) / 2;
+    const qrY = 10 / MM_TO_PT;
+    doc.image(qr, qrX, qrY, { width: qrSize, height: qrSize });
 
-  const barcode = await code128Png("TEST-SKU-123");
-  doc.image(barcode, 4 + qrSize + 4, 12, { width: pageWidth - (4 + qrSize + 4) - 4, height: 8 / MM_TO_PT });
-
-  doc.font("bold").fontSize(7).fillColor("#111111");
-  doc.text("TEST GH₵123.45", 4 + qrSize + 4, 12 + 8 / MM_TO_PT + 3, { lineBreak: false });
+    const barcode = await code128Png("TEST-SKU-123");
+    const barcodeY = qrY + qrSize + 4 / MM_TO_PT;
+    doc.image(barcode, 4 / MM_TO_PT, barcodeY, {
+      width: pageWidth - 8 / MM_TO_PT,
+      height: 8 / MM_TO_PT,
+    });
+    doc.font("bold").fontSize(7).fillColor("#111111");
+    doc.text("TEST GH₵123.45", 4 / MM_TO_PT, barcodeY + 10 / MM_TO_PT, {
+      width: pageWidth - 8 / MM_TO_PT,
+      lineBreak: false,
+    });
+  } else {
+    doc.image(qr, 4, 12, { width: qrSize, height: qrSize });
+    const barcode = await code128Png("TEST-SKU-123");
+    doc.image(barcode, 4 + qrSize + 4, 12, { width: pageWidth - (4 + qrSize + 4) - 4, height: 8 / MM_TO_PT });
+    doc.font("bold").fontSize(7).fillColor("#111111");
+    doc.text("TEST GH₵123.45", 4 + qrSize + 4, 12 + 8 / MM_TO_PT + 3, { lineBreak: false });
+  }
 
   return collect(doc);
 }

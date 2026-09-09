@@ -39,6 +39,7 @@ import { formatCedis } from "@/domain/counter/money";
 import CounterCartPanel from "./CounterCartPanel";
 import CounterProductCard from "./CounterProductCard";
 import CounterVariantPicker from "./CounterVariantPicker";
+import CounterReceiptPrintModal, { type CounterReceiptForPrint } from "./CounterReceiptPrintModal";
 import { AdminHint } from "@/components/admin/AdminHint";
 
 const PAGE_SIZE = 12;
@@ -57,6 +58,7 @@ export default function SellWorkspace() {
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [saleError, setSaleError] = useState("");
+  const [completedCashReceipt, setCompletedCashReceipt] = useState<CounterReceiptForPrint | null>(null);
   /**
    * One key per cart. It survives re-renders and failed attempts, so a retry
    * after a dropped response replays the same sale rather than ringing up a
@@ -178,9 +180,15 @@ export default function SellWorkspace() {
       }
 
       setItems((current) => applySoldQuantities(current, soldQuantitiesByVariant(lines)));
-      setNotice(
-        `Sale ${payload?.sale?.orderNumber || ""} completed · ${formatCedis(totals.total)}`.trim(),
-      );
+      const sale = payload?.sale as CounterReceiptForPrint;
+      if (paymentMethod === "cash" && sale?.id) {
+        setCompletedCashReceipt(sale);
+        setNotice("");
+      } else {
+        setNotice(
+          `Sale ${sale?.orderNumber || ""} completed · ${formatCedis(totals.total)}`.trim(),
+        );
+      }
       setLines([]);
       setCustomerName("");
       setCustomerPhone("");
@@ -389,6 +397,13 @@ export default function SellWorkspace() {
           if (displayName) setCustomerName(displayName);
         }}
         onComplete={() => void completeSale()}
+      />
+
+      <CounterReceiptPrintModal
+        key={completedCashReceipt?.id || "counter-receipt"}
+        open={Boolean(completedCashReceipt)}
+        receipt={completedCashReceipt}
+        onClose={() => setCompletedCashReceipt(null)}
       />
     </div>
   );
