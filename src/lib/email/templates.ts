@@ -241,6 +241,16 @@ export function birthdaySmsTemplate(): string {
   return "Hi {{parent_name}}, {{child_name}}'s birthday is {{birthday_countdown}}! Shop birthday gifts: " + siteUrl("/store");
 }
 
+/** Compact order confirmation copy for the SMS channel. */
+export function orderConfirmationSmsTemplate(order: {
+  orderNumber?: string | null;
+  total?: number | null;
+}): string {
+  const reference = order.orderNumber ? ` #${order.orderNumber}` : "";
+  const total = Number(order.total || 0) > 0 ? ` (${formatCedis(Number(order.total))})` : "";
+  return `Baebe Boo: Order${reference} is confirmed${total}. We are preparing it now.`;
+}
+
 export function birthdayTemplate(): { subject: string; html: string } {
   const body = `
     <p style="${TEXT}">Hi {{parent_name}},</p>
@@ -468,6 +478,11 @@ export function loginCodeTemplate(code: string, expiryMinutes: number): { subjec
   };
 }
 
+/** The same one-time sign-in code sent through the SMS channel. */
+export function loginCodeSmsTemplate(code: string, expiryMinutes: number): string {
+  return `Baebe Boo sign-in code: ${code}. It expires in ${expiryMinutes} minutes and can be used once.`;
+}
+
 /**
  * Sent instead of a code when a staff address is used on the customer form, so
  * the request does not vanish into a support black hole. It reveals nothing to
@@ -487,4 +502,9 @@ export function staffLoginRedirectTemplate(): { subject: string; html: string } 
       "This address signs in through the staff portal.",
     ),
   };
+}
+
+/** Short notice for a staff member who requested a customer login code. */
+export function staffLoginRedirectSmsTemplate(): string {
+  return "Baebe Boo: this address uses the staff portal. No customer sign-in code was issued.";
 }
