@@ -296,7 +296,7 @@ export async function sendOrderConfirmation(
 
       return {
         status: "sent",
-        simulated: emailSimulated,
+        simulated: emailSimulated && !smsSent,
         ...(smsSent ? { smsSent: true } : {}),
         ...(smsError ? { smsError } : {}),
         ...(pdf.reason ? { attachmentFailed: pdf.reason } : {}),
@@ -354,6 +354,11 @@ export async function resendOrderReceipt(orderId: string): Promise<ConfirmationO
     const emailSent = Boolean(emailResult?.sent && !("simulated" in emailResult && emailResult.simulated));
     const smsSent = Boolean(smsResult?.sent && !("simulated" in smsResult && smsResult.simulated));
     if (!emailSent && !smsSent) {
+      const simulated = Boolean(
+        (emailResult && "simulated" in emailResult && emailResult.simulated) ||
+          (smsResult && "simulated" in smsResult && smsResult.simulated),
+      );
+      if (simulated) return { status: "sent", simulated: true };
       return {
         status: "failed",
         reason: [
@@ -379,7 +384,9 @@ export async function resendOrderReceipt(orderId: string): Promise<ConfirmationO
 
     return {
       status: "sent",
-      simulated: Boolean(emailResult && "simulated" in emailResult && emailResult.simulated),
+      simulated: Boolean(
+        emailResult && "simulated" in emailResult && emailResult.simulated && !smsSent,
+      ),
       ...(smsSent ? { smsSent: true } : {}),
       ...(smsResult && !smsSent && !smsResult.sent ? { smsError: smsResult.error } : {}),
       ...(pdf.reason ? { attachmentFailed: pdf.reason } : {}),
