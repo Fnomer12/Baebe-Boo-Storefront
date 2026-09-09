@@ -971,3 +971,10 @@ select 'members.user_id exists',
        case when count(*) = 1 then 'OK' else 'FAILED' end
   from information_schema.columns
  where table_schema = 'public' and table_name = 'members' and column_name = 'user_id';
+
+-- 20260909_sms_campaigns.sql
+alter table public.campaign_recipients
+  add column if not exists sms_sent_at timestamptz;
+create index if not exists campaign_recipients_sms_pending_idx
+  on public.campaign_recipients (campaign_id)
+  where sms_sent_at is null;

@@ -77,6 +77,7 @@ function isLeapYear(year: number): boolean {
 export type BirthdayCandidate = {
   userId: string | null;
   email: string;
+  phone?: string | null;
   parentName: string;
   childName: string;
   childDateOfBirth: string | null;
@@ -107,8 +108,11 @@ export function dedupeBirthdayCandidates(
     const key = `${email}|${candidate.childDateOfBirth || candidate.childName.trim().toLowerCase()}`;
     const existing = byKey.get(key);
     // Prefer the row that knows the account: it is the one that can be credited.
+    // Preserve a phone number when one source has it and the other does not.
     if (!existing || (!existing.userId && candidate.userId)) {
-      byKey.set(key, { ...candidate, email });
+      byKey.set(key, { ...candidate, email, phone: candidate.phone || existing?.phone || null });
+    } else if (!existing.phone && candidate.phone) {
+      byKey.set(key, { ...existing, phone: candidate.phone });
     }
   }
 

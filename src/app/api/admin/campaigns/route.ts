@@ -46,7 +46,7 @@ export async function GET() {
    */
   const counts = await Promise.all(
     rows.map(async (campaign) => {
-      const [total, pending] = await Promise.all([
+      const [total, pending, smsPending] = await Promise.all([
         supabaseAdmin
           .from("campaign_recipients")
           .select("*", { count: "exact", head: true })
@@ -56,11 +56,17 @@ export async function GET() {
           .select("*", { count: "exact", head: true })
           .eq("campaign_id", campaign.id)
           .is("sent_at", null),
+        supabaseAdmin
+          .from("campaign_recipients")
+          .select("*", { count: "exact", head: true })
+          .eq("campaign_id", campaign.id)
+          .is("sms_sent_at", null),
       ]);
       return {
         id: campaign.id,
         total: total.count || 0,
         pending: pending.count || 0,
+        smsPending: smsPending.count || 0,
       };
     }),
   );
@@ -81,6 +87,7 @@ export async function GET() {
         audienceCount: campaign.audience_count || 0,
         recipientCount: count?.total || 0,
         pendingCount: count?.pending || 0,
+        smsPendingCount: count?.smsPending || 0,
         lastError: lastErrors.get(campaign.id) || null,
         createdAt: campaign.created_at,
         updatedAt: campaign.updated_at,

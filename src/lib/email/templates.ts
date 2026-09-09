@@ -236,6 +236,11 @@ export function welcomeTemplate(name?: string): { subject: string; html: string 
  * the whole HTML string, so the hidden preview line is substituted like
  * anything else.
  */
+/** The compact plain-text variant used by the SMS channel. */
+export function birthdaySmsTemplate(): string {
+  return "Hi {{parent_name}}, {{child_name}}'s birthday is {{birthday_countdown}}! Shop birthday gifts: " + siteUrl("/store");
+}
+
 export function birthdayTemplate(): { subject: string; html: string } {
   const body = `
     <p style="${TEXT}">Hi {{parent_name}},</p>
