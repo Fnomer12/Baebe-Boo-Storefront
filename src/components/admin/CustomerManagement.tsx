@@ -132,6 +132,7 @@ type AdminCampaign = {
   audienceCount: number;
   recipientCount: number;
   pendingCount: number;
+  smsPendingCount: number;
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
@@ -140,6 +141,7 @@ type AdminCampaign = {
 type BirthdayRecipient = {
   userId: string | null;
   email: string;
+  phone: string | null;
   parentName: string;
   childName: string;
   childDateOfBirth: string | null;
@@ -153,6 +155,8 @@ type CampaignPreview = {
   preview: { subject: string; html: string; sampledFrom: string | null; unresolved: string[] };
   tokens: { token: string; describes: string }[];
   emailConfigured: boolean;
+  smsConfigured: boolean;
+  smsPreview: string;
 };
 
 /**
@@ -386,6 +390,7 @@ function normalizeCampaigns(value: unknown): AdminCampaign[] {
       audienceCount: Number(row.audienceCount || 0),
       recipientCount: Number(row.recipientCount || 0),
       pendingCount: Number(row.pendingCount || 0),
+      smsPendingCount: Number(row.smsPendingCount || 0),
       lastError: row.lastError ? String(row.lastError) : null,
       createdAt: String(row.createdAt || ""),
       updatedAt: String(row.updatedAt || ""),
@@ -1717,6 +1722,23 @@ function CampaignSection() {
     refresh();
   }
 
+  async function sendSmsCampaign(campaign: AdminCampaign) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    const response = await fetch(`/api/admin/campaigns/${campaign.id}/send-sms`, { method: "POST" });
+    const payload = await response.json().catch(() => null);
+    setBusy(false);
+
+    if (!response.ok) {
+      setError(payload?.message || "SMS could not be sent.");
+      refresh();
+      return;
+    }
+    setNotice(payload?.message || `Sent ${payload?.sent ?? 0} SMS messages.`);
+    refresh();
+  }
+
   return (
     <section className="rounded-3xl border border-black/[0.07] bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1776,6 +1798,7 @@ function CampaignSection() {
                     {campaign.campaignType} · {campaign.status}
                     {campaign.recipientCount > 0 && ` · ${campaign.recipientCount} recipients`}
                     {campaign.pendingCount > 0 && ` · ${campaign.pendingCount} still queued`}
+                    {campaign.smsPendingCount > 0 && ` · ${campaign.smsPendingCount} SMS queued`}
                   </p>
                   {campaign.scheduledAt && campaign.status !== "sent" && (
                     <p className="mt-1 flex items-center gap-1.5 text-xs text-black/45">
@@ -1794,6 +1817,16 @@ function CampaignSection() {
                       className="flex min-h-11 items-center gap-1.5 rounded-xl bg-[#28637d] px-3 text-xs font-semibold text-white disabled:opacity-60"
                     >
                       <Send size={13} /> Send now
+                    </button>
+                  )}
+                  {campaign.smsPendingCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void sendSmsCampaign(campaign)}
+                      disabled={busy}
+                      className="flex min-h-11 items-center gap-1.5 rounded-xl border border-[#28637d] px-3 text-xs font-semibold text-[#28637d] disabled:opacity-60"
+                    >
+                      <Phone size={13} /> Send SMS
                     </button>
                   )}
                   <button
@@ -2007,6 +2040,17 @@ function CampaignPreviewModal({
             than being marked as sent when it was not.
           </InlineNote>
         )}
+        <div className="rounded-2xl border border-[var(--color-line)] bg-[#f4fbfd] p-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#28637d]">
+            <Phone size={14} /> SMS preview
+          </div>
+          <p className="mt-2 text-sm text-black/70">{preview.smsPreview}</p>
+          <p className="mt-2 text-xs text-black/50">
+            {preview.smsConfigured
+              ? "FROG by Wigal is connected. After creating the campaign, use Send SMS on its row to deliver this message."
+              : "SMS is not configured yet. Add the FROG API settings before sending SMS."}
+          </p>
+        </div>
         {familyCount === 0 && (
           <InlineNote>
             No child has a birthday in the next {preview.daysAhead} days. Add children and their

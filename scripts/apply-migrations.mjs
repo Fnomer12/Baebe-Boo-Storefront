@@ -42,6 +42,7 @@ const MIGRATIONS = [
   ["20260808_featured_products_and_shipping_columns.sql", "products.is_featured + orders shipping columns"],
   ["20260904_category_promotions_loyalty.sql", "promotion_categories + channel flags + loyalty tiers/policy"],
   ["20260905_site_settings.sql", "site_settings + store_ready flag"],
+  ["20260909_sms_campaigns.sql", "campaign SMS delivery tracking"],
 ];
 
 const VERIFY = `
@@ -109,7 +110,13 @@ union all
 select 'site_settings store_ready seeded',
        case when count(*) = 1 then 'OK' else 'FAILED' end
   from public.site_settings
- where key = 'store_ready';
+ where key = 'store_ready'
+union all
+select 'campaign recipients SMS tracking exists',
+       case when count(*) = 1 then 'OK' else 'FAILED' end
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'campaign_recipients'
+   and column_name = 'sms_sent_at';
 `;
 
 function projectRef() {

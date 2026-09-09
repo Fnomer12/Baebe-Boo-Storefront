@@ -30,6 +30,7 @@ export const RESEND_BATCH_LIMIT = 100;
 export type CampaignRecipient = {
   userId?: string | null;
   email: string;
+  phone?: string | null;
   parentName?: string;
   childName?: string;
   daysUntilBirthday?: number | null;
@@ -239,7 +240,10 @@ export function recipientUpsertRows(
       campaign_id: campaignId,
       user_id: recipient.userId || null,
       email,
-      metadata: campaignTokens(recipient),
+      metadata: {
+        ...campaignTokens(recipient),
+        ...(recipient.phone ? { phone: String(recipient.phone) } : {}),
+      },
     };
 
     const existing = byEmail.get(email);
@@ -278,6 +282,8 @@ export type BulkSendResult =
        * next cron tick mailed the wrong three again.
        */
       acceptedEmails?: string[];
+      /** Generic recipient identifiers (for channels such as SMS). */
+      acceptedRecipients?: string[];
     }
   | { sent: false; error: string };
 

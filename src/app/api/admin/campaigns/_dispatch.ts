@@ -248,3 +248,118 @@ function isMissingColumn(error: { code?: string; message?: string }): boolean {
     /column .* does not exist/i.test(error.message || "")
   );
 }
+
+/**
+ * Send the SMS channel for the next batch of a campaign via FROG by Wigal.
+ * SMS delivery is tracked separately from email (`sms_sent_at`) so an operator
+ * can send both channels without either one suppressing the other.
+ */
+export async function dispatchSmsCampaignBatch(
+  campaignId: string,
+  campaignType: string,
+  batchSize = CAMPAIGN_BATCH_SIZE,
+): Promise<DispatchResult> {
+  const { data: pending, error } = await supabaseAdmin
+    .from("campaign_recipients")
+    .select("id, email, metadata")
+    .eq("campaign_id", campaignId)
+    .is("sms_sent_at", null)
+    .order("created_at", { ascending: true })
+    .limit(batchSize);
+  if (error) throw new Error(error.message);
+
+  const batch = pending || [];
+  if (batch.length === 0) {
+    return { sent: 0, remaining: 0, simulated: false, status: "sent", message: null };
+  }
+
+  const template = campaignType === "birthday"
+    ? (await import("@/lib/email/templates")).birthdaySmsTemplate()
+    : "Baebe Boo has an update for you.";
+  const now = new Date();
+  const recipients = batch.flatMap((recipient) => {
+    const metadata = sendTimeTokens((recipient.metadata || {}) as Record<string, unknown>, now);
+    const phone = typeof metadata.phone === "string" ? metadata.phone.trim() : "";
+    return phone ? [{ id: recipient.id, phone, metadata }] : [];
+  });
+
+  // Numbers absent from the saved audience cannot ever be delivered. Mark them
+  // attempted so they do not occupy every future scheduled batch forever.
+  const undeliverable = batch.filter((recipient) => {
+    const metadata = (recipient.metadata || {}) as Record<string, unknown>;
+    return !(typeof metadata.phone === "string" && metadata.phone.trim());
+  });
+  if (undeliverable.length > 0) {
+    const { error: skipError } = await supabaseAdmin
+      .from("campaign_recipients")
+      .update({ sms_sent_at: now.toISOString() })
+      .in("id", undeliverable.map((recipient) => recipient.id));
+    if (skipError) throw new Error(skipError.message);
+  }
+
+  if (recipients.length === 0) {
+    return {
+      sent: 0,
+      remaining: await countSmsPending(campaignId),
+      simulated: false,
+      status: "ready",
+      message: `${undeliverable.length} recipient${undeliverable.length === 1 ? " has" : "s have"} no valid phone number, so no SMS was sent.`,
+    };
+  }
+
+  const { sendBulkSms } = await import("@/lib/sms");
+  const outcome = await sendBulkSms(
+    recipients.map((recipient) => ({ phone: recipient.phone, metadata: recipient.metadata })),
+    template,
+  );
+  if (!outcome.sent) {
+    return {
+      sent: 0,
+      remaining: await countSmsPending(campaignId),
+      simulated: false,
+      status: "ready",
+      message: outcome.error,
+    };
+  }
+  if (outcome.simulated) {
+    return {
+      sent: 0,
+      remaining: await countSmsPending(campaignId),
+      simulated: true,
+      status: "ready",
+      message: "Nothing was sent — FROG is not configured yet. Add FROG_API_KEY, FROG_USERNAME and FROG_SENDER_ID before sending SMS.",
+    };
+  }
+
+  const acceptedPhones = new Set((outcome.acceptedRecipients || []).map((phone) => phone.trim()));
+  const accepted = recipients.filter((recipient) => {
+    const normalized = recipient.phone.replace(/\D/g, "");
+    return acceptedPhones.has(normalized) || acceptedPhones.has(recipient.phone);
+  });
+  const stampedIds = accepted.length > 0 ? accepted.map((recipient) => recipient.id) : recipients.slice(0, outcome.count).map((recipient) => recipient.id);
+  const { error: stampError } = await supabaseAdmin
+    .from("campaign_recipients")
+    .update({ sms_sent_at: now.toISOString() })
+    .in("id", stampedIds);
+  if (stampError) throw new Error(`${stampedIds.length} SMS were sent but could not be marked as sent (${stampError.message}).`);
+
+  const remaining = await countSmsPending(campaignId);
+  return {
+    sent: stampedIds.length,
+    remaining,
+    simulated: false,
+    status: remaining === 0 ? "sent" : "ready",
+    message: undeliverable.length > 0
+      ? `${stampedIds.length} SMS sent. ${undeliverable.length} recipient${undeliverable.length === 1 ? " had" : "s had"} no valid phone number.`
+      : null,
+  };
+}
+
+export async function countSmsPending(campaignId: string): Promise<number> {
+  const { count } = await supabaseAdmin
+    .from("campaign_recipients")
+    .select("*", { count: "exact", head: true })
+    .eq("campaign_id", campaignId)
+    .is("sms_sent_at", null);
+  return count || 0;
+}

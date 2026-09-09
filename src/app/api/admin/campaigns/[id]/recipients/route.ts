@@ -37,6 +37,7 @@ export async function GET(
         id: row.id,
         userId: row.user_id,
         email: row.email,
+        phone: String(metadata.phone || ""),
         parentName: String(metadata.parent_name || ""),
         childName: String(metadata.child_name || ""),
         daysUntilBirthday:

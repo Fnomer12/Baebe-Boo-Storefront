@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authorizeAdminApi } from "@/lib/auth";
 import { isEmailDeliveryConfigured } from "@/lib/email";
+import { isSmsDeliveryConfigured, normalizeGhanaPhone } from "@/lib/sms";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { daysUntilBirthday } from "@/domain/admin-customers";
 import { dedupeBirthdayCandidates, type BirthdayCandidate } from "@/domain/crm/birthday";
@@ -13,6 +14,7 @@ import {
 } from "@/domain/crm/campaign-send";
 import { normalizeEmail } from "@/domain/crm/customer-identity";
 import { campaignTemplate } from "../_dispatch";
+import { birthdaySmsTemplate } from "@/lib/email/templates";
 
 /**
  * Everything the admin needs to decide whether to send, WITHOUT creating
@@ -53,6 +55,7 @@ export async function GET(request: Request) {
     : campaignTokens({ email: "", parentName: "Ama Mensah", childName: "Kojo", daysUntilBirthday: 7 });
 
   const html = personalizeHtml(template.html, sample);
+  const smsPreview = personalize(birthdaySmsTemplate(), sample);
 
   return NextResponse.json({
     daysAhead,
@@ -60,6 +63,7 @@ export async function GET(request: Request) {
     recipients: recipients.map((recipient) => ({
       userId: recipient.userId,
       email: recipient.email,
+      phone: recipient.phone || null,
       parentName: recipient.parentName,
       childName: recipient.childName,
       childDateOfBirth: recipient.childDateOfBirth,
@@ -78,6 +82,8 @@ export async function GET(request: Request) {
      * do something about it.
      */
     emailConfigured: isEmailDeliveryConfigured(),
+    smsConfigured: isSmsDeliveryConfigured(),
+    smsPreview,
   });
 }
 
@@ -104,12 +110,16 @@ function clampDays(value: string | null): number {
  * way — so this stays correct after the migration rather than double-counting.
  */
 async function loadBirthdayRecipients(daysAhead: number): Promise<BirthdayCandidate[]> {
-  const [fromRpc, fromMembers] = await Promise.all([
+  const [fromRpc, fromMembers, fromChildren] = await Promise.all([
     loadFromRpc(daysAhead),
     loadFromMembers(),
+    // The current RPC predates phone support. Always include the direct child
+    // query so account recipients can contribute their profile phone number;
+    // dedupeBirthdayCandidates merges that detail into the RPC row.
+    loadFromChildren(),
   ]);
 
-  return dedupeBirthdayCandidates([...fromRpc, ...fromMembers]).filter(
+  return dedupeBirthdayCandidates([...fromRpc, ...fromMembers, ...fromChildren]).filter(
     (candidate) => candidate.daysUntilBirthday <= daysAhead,
   );
 }
@@ -122,6 +132,7 @@ async function loadFromRpc(daysAhead: number): Promise<BirthdayCandidate[]> {
     return data.map((row: Record<string, unknown>) => ({
       userId: row.user_id ? String(row.user_id) : null,
       email: normalizeEmail(row.email),
+      phone: normalizeGhanaPhone(row.phone ? String(row.phone) : null),
       parentName: String(row.parent_name || ""),
       childName: String(row.child_name || ""),
       childDateOfBirth: row.child_date_of_birth ? String(row.child_date_of_birth) : null,
@@ -143,7 +154,7 @@ async function loadFromChildren(): Promise<BirthdayCandidate[]> {
   const { data: profiles } = userIds.length
     ? await supabaseAdmin
         .from("customer_profiles")
-        .select("user_id, email, full_name")
+        .select("user_id, email, full_name, phone")
         .in("user_id", userIds)
     : { data: [] };
   const profileById = new Map((profiles || []).map((profile) => [profile.user_id, profile]));
@@ -156,6 +167,7 @@ async function loadFromChildren(): Promise<BirthdayCandidate[]> {
       {
         userId: child.user_id,
         email,
+        phone: normalizeGhanaPhone(profile?.phone),
         parentName: profile?.full_name || "",
         childName: child.first_name || "",
         childDateOfBirth: String(child.date_of_birth),
@@ -168,7 +180,7 @@ async function loadFromChildren(): Promise<BirthdayCandidate[]> {
 async function loadFromMembers(): Promise<BirthdayCandidate[]> {
   const { data: members, error } = await supabaseAdmin
     .from("members")
-    .select("id, email, parent_name, child_first_name, child_date_of_birth")
+    .select("id, email, parent_name, phone, child_first_name, child_date_of_birth")
     .not("child_date_of_birth", "is", null)
     .limit(2000);
   if (error) return [];
@@ -180,6 +192,7 @@ async function loadFromMembers(): Promise<BirthdayCandidate[]> {
       {
         userId: null,
         email,
+        phone: normalizeGhanaPhone(member.phone),
         parentName: member.parent_name || "",
         childName: member.child_first_name || "",
         childDateOfBirth: String(member.child_date_of_birth),
