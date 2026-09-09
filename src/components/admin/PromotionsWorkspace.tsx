@@ -40,6 +40,7 @@ import {
   optionalNumber,
   optionalText,
 } from "@/domain/forms/form-values";
+import { productCategories } from "@/domain/catalog/product-taxonomy";
 import { formatCedis } from "@/domain/money";
 
 type Promotion = {
@@ -56,10 +57,14 @@ type Promotion = {
   perCustomerLimit: number | null;
   stackable: boolean;
   automatic: boolean;
+  availableOnline: boolean;
+  availableAtCounter: boolean;
   code: string | null;
   codeUsageCount: number;
   productIds: string[];
   excludedProductIds: string[];
+  categories: string[];
+  excludedCategories: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -80,7 +85,26 @@ type LoyaltyRule = {
   eventType: string;
   points: number;
   isActive: boolean;
+  earnOnline: boolean;
+  earnAtCounter: boolean;
+  config: Record<string, unknown>;
   updatedAt: string;
+};
+
+type LoyaltyTier = {
+  id: string;
+  name: string;
+  minLifetimePoints: number;
+  earnMultiplier: number;
+  isActive: boolean;
+};
+
+type RedemptionPolicy = {
+  pointsPerCedi: number;
+  minimumRedemptionPoints: number;
+  maximumOrderShare: number;
+  allowOnline: boolean;
+  allowAtCounter: boolean;
 };
 
 type Tab = "promotions" | "vouchers" | "loyalty";
@@ -117,10 +141,14 @@ function normalizePromotions(value: unknown): Promotion[] {
       perCustomerLimit: row.perCustomerLimit ? Number(row.perCustomerLimit) : null,
       stackable: Boolean(row.stackable),
       automatic: Boolean(row.automatic),
+      availableOnline: row.availableOnline !== undefined ? Boolean(row.availableOnline) : row.available_online !== undefined ? Boolean(row.available_online) : true,
+      availableAtCounter: row.availableAtCounter !== undefined ? Boolean(row.availableAtCounter) : row.available_at_counter !== undefined ? Boolean(row.available_at_counter) : false,
       code: row.code ? String(row.code) : null,
       codeUsageCount: Number(row.codeUsageCount || 0),
       productIds: toStringList(row.productIds),
       excludedProductIds: toStringList(row.excludedProductIds),
+      categories: toStringList(row.categories),
+      excludedCategories: toStringList(row.excludedCategories),
       createdAt: String(row.createdAt || ""),
       updatedAt: String(row.updatedAt || ""),
     };
@@ -153,6 +181,9 @@ function normalizeLoyaltyRules(value: unknown): LoyaltyRule[] {
       eventType: String(row.eventType || row.event_type || ""),
       points: Number(row.points || 0),
       isActive: "isActive" in row ? Boolean(row.isActive) : "is_active" in row ? Boolean(row.is_active) : true,
+      earnOnline: "earnOnline" in row ? Boolean(row.earnOnline) : "earn_online" in row ? Boolean(row.earn_online) : true,
+      earnAtCounter: "earnAtCounter" in row ? Boolean(row.earnAtCounter) : "earn_at_counter" in row ? Boolean(row.earn_at_counter) : false,
+      config: (row.config && typeof row.config === "object" ? row.config : {}) as Record<string, unknown>,
       updatedAt: String(row.updatedAt || row.updated_at || ""),
     };
   });
@@ -381,6 +412,20 @@ function ReachCell({ promotion }: { promotion: Promotion }) {
     automatic: promotion.automatic,
     code: promotion.code ?? undefined,
   });
+  const channels = [
+    promotion.availableOnline ? "Online" : null,
+    promotion.availableAtCounter ? "Till" : null,
+  ].filter(Boolean).join(" · ") || "Nowhere";
+  const scope =
+    promotion.categories.length > 0
+      ? `${promotion.categories.length} categor${promotion.categories.length === 1 ? "y" : "ies"}`
+      : promotion.excludedCategories.length > 0
+        ? `all but ${promotion.excludedCategories.length} categor${promotion.excludedCategories.length === 1 ? "y" : "ies"}`
+        : promotion.productIds.length > 0
+          ? `${promotion.productIds.length} products`
+          : promotion.excludedProductIds.length > 0
+            ? `all but ${promotion.excludedProductIds.length} products`
+            : "everything";
   if (warning) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700">
@@ -394,6 +439,9 @@ function ReachCell({ promotion }: { promotion: Promotion }) {
       {promotion.automatic ? "Automatic" : null}
       {promotion.automatic && promotion.code ? " · " : null}
       {promotion.code ? <span className="font-mono uppercase">{promotion.code}</span> : null}
+      <span className="block">
+        {channels} · {scope}
+      </span>
     </span>
   );
 }
@@ -434,6 +482,8 @@ type PromotionFormState = {
   amount: string;
   code: string;
   automatic: boolean;
+  availableOnline: boolean;
+  availableAtCounter: boolean;
   status: PromotionStatus;
   description: string;
   minimumOrderAmount: string;
@@ -444,6 +494,8 @@ type PromotionFormState = {
   stackable: boolean;
   targeting: "all" | "only" | "except";
   targetProductIds: string[];
+  categoryTargeting: "all" | "only" | "except";
+  targetCategories: string[];
 };
 
 function initialFormState(promotion: Promotion | null): PromotionFormState {
@@ -454,6 +506,8 @@ function initialFormState(promotion: Promotion | null): PromotionFormState {
       amount: "",
       code: "",
       automatic: true,
+      availableOnline: true,
+      availableAtCounter: false,
       status: "active",
       description: "",
       minimumOrderAmount: "",
@@ -464,11 +518,18 @@ function initialFormState(promotion: Promotion | null): PromotionFormState {
       stackable: false,
       targeting: "all",
       targetProductIds: [],
+      categoryTargeting: "all",
+      targetCategories: [],
     };
   }
   const targeting = promotion.excludedProductIds.length > 0
     ? "except"
     : promotion.productIds.length > 0
+      ? "only"
+      : "all";
+  const categoryTargeting = promotion.excludedCategories.length > 0
+    ? "except"
+    : promotion.categories.length > 0
       ? "only"
       : "all";
   return {
@@ -477,6 +538,8 @@ function initialFormState(promotion: Promotion | null): PromotionFormState {
     amount: promotion.value ? String(promotion.value) : "",
     code: promotion.code ?? "",
     automatic: promotion.automatic,
+    availableOnline: promotion.availableOnline,
+    availableAtCounter: promotion.availableAtCounter,
     status: (["draft", "active", "paused", "expired"] as const).includes(
       promotion.status as PromotionStatus,
     )
@@ -491,6 +554,8 @@ function initialFormState(promotion: Promotion | null): PromotionFormState {
     stackable: promotion.stackable,
     targeting,
     targetProductIds: targeting === "except" ? promotion.excludedProductIds : promotion.productIds,
+    categoryTargeting,
+    targetCategories: categoryTargeting === "except" ? promotion.excludedCategories : promotion.categories,
   };
 }
 
@@ -531,6 +596,8 @@ function PromotionFormModal({
       minimumOrderAmount: optionalNumber(form.minimumOrderAmount),
       code: optionalText(form.code),
       automatic: form.automatic,
+      availableOnline: form.availableOnline,
+      availableAtCounter: form.availableAtCounter,
       stackable: form.stackable,
       status: form.status,
       startsAt: localDateTimeToIso(form.startsAt),
@@ -539,6 +606,8 @@ function PromotionFormModal({
       perCustomerLimit: optionalNumber(form.perCustomerLimit),
       productIds: form.targeting === "only" ? form.targetProductIds : [],
       excludedProductIds: form.targeting === "except" ? form.targetProductIds : [],
+      categories: form.categoryTargeting === "only" ? form.targetCategories : [],
+      excludedCategories: form.categoryTargeting === "except" ? form.targetCategories : [],
     }),
     [form],
   );
@@ -725,6 +794,35 @@ function PromotionFormModal({
           )}
         </div>
 
+        <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
+          <p className="text-sm font-semibold text-[var(--color-ink)]">Where does it run?</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--color-ink-soft)]">
+            The online shop always applies qualifying offers at checkout. The till only applies
+            automatic offers — it has no code box — and only when you switch it on here.
+          </p>
+          <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-medium text-[var(--color-ink)]">
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-[var(--color-brand-deep)]"
+              checked={form.availableOnline}
+              onChange={(event) => set("availableOnline", event.target.checked)}
+            />
+            Online shop
+          </label>
+          <label className="mt-1 flex min-h-11 items-center gap-3 text-sm font-medium text-[var(--color-ink)]">
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-[var(--color-brand-deep)]"
+              checked={form.availableAtCounter}
+              onChange={(event) => set("availableAtCounter", event.target.checked)}
+            />
+            Till (automatic only)
+          </label>
+          {errors.availableAtCounter && (
+            <p className="mt-2 text-xs font-medium text-red-700">{errors.availableAtCounter}</p>
+          )}
+        </div>
+
         <p className="rounded-2xl bg-[var(--color-brand-tint)] px-4 py-3 text-sm text-[var(--color-brand-deep)]">
           <span className="font-semibold">In plain words: </span>
           {describePromotion({
@@ -882,6 +980,14 @@ function PromotionFormModal({
                 onModeChange={(mode) => set("targeting", mode)}
                 onSelectionChange={(ids) => set("targetProductIds", ids)}
               />
+
+              <CategoryTargeting
+                mode={form.categoryTargeting}
+                selected={form.targetCategories}
+                error={errors.categories || errors.excludedCategories}
+                onModeChange={(mode) => set("categoryTargeting", mode)}
+                onSelectionChange={(values) => set("targetCategories", values)}
+              />
             </div>
           )}
         </div>
@@ -970,7 +1076,7 @@ function ProductTargeting({
         label="Which products"
         htmlFor="promotion-targeting"
         error={error}
-        hint="By default the offer applies to any basket. Narrow it to a chosen list, or apply it to everything except a chosen list — useful for keeping already-reduced lines out of a sale. The offer only applies when EVERY item in the basket qualifies."
+        hint="By default the offer applies to any basket. Narrow it to a chosen list, or apply it to everything except a chosen list. Only matching lines are discounted — the rest of the basket stays full price."
       >
         <AdminSelect
           id="promotion-targeting"
@@ -1030,6 +1136,75 @@ function ProductTargeting({
               </div>
             </>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoryTargeting({
+  mode,
+  selected,
+  error,
+  onModeChange,
+  onSelectionChange,
+}: {
+  mode: "all" | "only" | "except";
+  selected: string[];
+  error?: string;
+  onModeChange: (mode: "all" | "only" | "except") => void;
+  onSelectionChange: (values: string[]) => void;
+}) {
+  function toggle(category: string) {
+    onSelectionChange(
+      selected.includes(category)
+        ? selected.filter((entry) => entry !== category)
+        : [...selected, category],
+    );
+  }
+
+  return (
+    <div>
+      <HintedField
+        label="Which categories"
+        htmlFor="promotion-category-targeting"
+        error={error}
+        hint="Discount whole departments at once — for example 10% off Feeding. Only items in the chosen categories are discounted. Combines with the product list above: exclusion always wins."
+      >
+        <AdminSelect
+          id="promotion-category-targeting"
+          value={mode}
+          onChange={(event) => {
+            const next = event.target.value as "all" | "only" | "except";
+            onModeChange(next);
+            if (next === "all") onSelectionChange([]);
+          }}
+        >
+          <option value="all">All categories</option>
+          <option value="only">Only the categories I choose</option>
+          <option value="except">Everything except the categories I choose</option>
+        </AdminSelect>
+      </HintedField>
+
+      {mode !== "all" && (
+        <div className="mt-3 rounded-2xl border border-[var(--color-line)] p-3">
+          <p className="text-xs text-[var(--color-ink-soft)]">{selected.length} selected</p>
+          <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {productCategories.map((category) => (
+              <label
+                key={category}
+                className="flex min-h-11 items-center gap-3 rounded-xl px-2 text-sm hover:bg-[var(--color-cream)]"
+              >
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-[var(--color-brand-deep)]"
+                  checked={selected.includes(category)}
+                  onChange={() => toggle(category)}
+                />
+                <span className="min-w-0 flex-1 truncate">{category}</span>
+              </label>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1265,10 +1440,22 @@ function VoucherFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 
 function LoyaltyRulesTab() {
   const [rules, setRules] = useState<LoyaltyRule[]>([]);
+  const [tiers, setTiers] = useState<LoyaltyTier[]>([]);
+  const [policy, setPolicy] = useState<RedemptionPolicy>({
+    pointsPerCedi: 100,
+    minimumRedemptionPoints: 500,
+    maximumOrderShare: 0.2,
+    allowOnline: true,
+    allowAtCounter: false,
+  });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [saveNote, setSaveNote] = useState("");
   const [edits, setEdits] = useState<Record<string, number>>({});
+  const [purchaseRate, setPurchaseRate] = useState("1");
+  const [purchaseMinimum, setPurchaseMinimum] = useState("0");
+  const [purchaseExpiry, setPurchaseExpiry] = useState("365");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1280,6 +1467,34 @@ function LoyaltyRulesTab() {
       const loaded = normalizeLoyaltyRules(payload.rules);
       setRules(loaded);
       setEdits(Object.fromEntries(loaded.map((rule) => [rule.id, rule.points])));
+      if (Array.isArray(payload.tiers)) {
+        setTiers(
+          payload.tiers.map((tier: Record<string, unknown>) => ({
+            id: String(tier.id || ""),
+            name: String(tier.name || ""),
+            minLifetimePoints: Number(tier.minLifetimePoints ?? tier.min_lifetime_points ?? 0),
+            earnMultiplier: Number(tier.earnMultiplier ?? tier.earn_multiplier ?? 1),
+            isActive: tier.isActive !== undefined ? Boolean(tier.isActive) : tier.is_active !== false,
+          })),
+        );
+      }
+      if (payload.redemptionPolicy) {
+        const incoming = payload.redemptionPolicy as Record<string, unknown>;
+        setPolicy({
+          pointsPerCedi: Number(incoming.pointsPerCedi ?? 100),
+          minimumRedemptionPoints: Number(incoming.minimumRedemptionPoints ?? 500),
+          maximumOrderShare: Number(incoming.maximumOrderShare ?? 0.2),
+          allowOnline: incoming.allowOnline !== false,
+          allowAtCounter: incoming.allowAtCounter === true,
+        });
+      }
+      const purchase = loaded.find((rule) => rule.eventType === "purchase");
+      const config = (purchase?.config || {}) as Record<string, unknown>;
+      if (config.points_per_cedi !== undefined) setPurchaseRate(String(config.points_per_cedi));
+      if (config.minimum_order_amount !== undefined) setPurchaseMinimum(String(config.minimum_order_amount));
+      if (config.expiry_days !== undefined && config.expiry_days !== null) {
+        setPurchaseExpiry(String(config.expiry_days));
+      }
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Loyalty rules could not be loaded.");
     } finally {
@@ -1292,23 +1507,70 @@ function LoyaltyRulesTab() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  async function saveRule(rule: LoyaltyRule) {
-    const points = edits[rule.id];
-    if (points === undefined || points === rule.points) return;
+  async function patchRule(id: string, body: Record<string, unknown>) {
     setSaveError("");
+    setSaveNote("");
     const response = await fetch("/api/admin/loyalty-rules", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: rule.id, points }),
+      body: JSON.stringify({ id, ...body }),
     });
     if (!response.ok) {
-      // Keeps the edited numbers on screen; the old version replaced the whole
-      // list with an error page and threw the pending edit away.
       const failure = await readFailure(response, "That rule could not be saved.");
+      setSaveError(failure.message);
+      return false;
+    }
+    await load();
+    return true;
+  }
+
+  async function savePoints(rule: LoyaltyRule) {
+    const points = edits[rule.id];
+    if (points === undefined || points === rule.points) return;
+    await patchRule(rule.id, { points });
+  }
+
+  async function savePurchaseConfig() {
+    const purchase = rules.find((rule) => rule.eventType === "purchase");
+    if (!purchase) return;
+    const rate = Number(purchaseRate);
+    const minimum = Number(purchaseMinimum);
+    const expiry = purchaseExpiry.trim() === "" ? null : Number(purchaseExpiry);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      setSaveError("Points per cedi has to be more than 0.");
+      return;
+    }
+    const ok = await patchRule(purchase.id, {
+      config: {
+        points_per_cedi: rate,
+        minimum_order_amount: Number.isFinite(minimum) && minimum >= 0 ? minimum : 0,
+        category_multipliers: (purchase.config?.categoryMultipliers as Record<string, number> | undefined) || (purchase.config?.category_multipliers as Record<string, number> | undefined) || {},
+        expiry_days: expiry,
+      },
+    });
+    if (ok) setSaveNote("Purchase earn rule saved.");
+  }
+
+  async function savePolicy() {
+    setSaveError("");
+    setSaveNote("");
+    const response = await fetch("/api/admin/loyalty-policy", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pointsPerCedi: policy.pointsPerCedi,
+        minimumRedemptionPoints: policy.minimumRedemptionPoints,
+        maximumOrderShare: policy.maximumOrderShare,
+        allowOnline: policy.allowOnline,
+        allowAtCounter: policy.allowAtCounter,
+      }),
+    });
+    if (!response.ok) {
+      const failure = await readFailure(response, "Redemption rules could not be saved.");
       setSaveError(failure.message);
       return;
     }
-    await load();
+    setSaveNote("Redemption rules saved.");
   }
 
   if (loadError && rules.length === 0) {
@@ -1317,42 +1579,227 @@ function LoyaltyRulesTab() {
   if (loading && rules.length === 0) return <LoadingState />;
 
   return (
-    <section className="space-y-4">
-      <p className="text-sm text-[var(--color-ink-soft)]">Adjust how many points each loyalty event awards.</p>
+    <section className="space-y-6">
+      <p className="text-sm text-[var(--color-ink-soft)]">
+        Points per event, where each event earns (online shop, till), purchase earn rate, tiers and
+        redemption limits. Till earn only counts for account holders found via member lookup.
+      </p>
       {saveError && <InlineError message={saveError} onDismiss={() => setSaveError("")} />}
+      {saveNote && (
+        <p role="status" className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          {saveNote}
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-3">
         {rules.map((rule) => (
           <div
             key={rule.id}
-            className="flex flex-col gap-3 rounded-3xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-3 rounded-3xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-sm"
           >
-            <div>
-              <p className="font-semibold capitalize">{rule.eventType.replaceAll("_", " ")}</p>
-              <p className="text-xs text-[var(--color-ink-soft)]">{rule.isActive ? "Active" : "Inactive"}</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold capitalize">{rule.eventType.replaceAll("_", " ")}</p>
+                <p className="text-xs text-[var(--color-ink-soft)]">{rule.isActive ? "Active" : "Inactive"}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="sr-only" htmlFor={`points-${rule.id}`}>
+                  Points for {rule.eventType.replaceAll("_", " ")}
+                </label>
+                <input
+                  id={`points-${rule.id}`}
+                  type="number"
+                  min={1}
+                  value={edits[rule.id] ?? rule.points}
+                  onChange={(event) => setEdits((current) => ({ ...current, [rule.id]: Number(event.target.value) }))}
+                  className="admin-input w-28"
+                />
+                <button
+                  type="button"
+                  onClick={() => void savePoints(rule)}
+                  disabled={(edits[rule.id] ?? rule.points) === rule.points}
+                  className="admin-button min-h-11 px-4 text-xs disabled:opacity-40"
+                >
+                  <Save size={14} /> Save
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="sr-only" htmlFor={`points-${rule.id}`}>
-                Points for {rule.eventType.replaceAll("_", " ")}
+            <div className="flex flex-wrap gap-4 text-xs font-medium">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--color-brand-deep)]"
+                  checked={rule.isActive}
+                  onChange={() => void patchRule(rule.id, { isActive: !rule.isActive })}
+                />
+                Active
               </label>
-              <input
-                id={`points-${rule.id}`}
-                type="number"
-                min={1}
-                value={edits[rule.id] ?? rule.points}
-                onChange={(event) => setEdits((current) => ({ ...current, [rule.id]: Number(event.target.value) }))}
-                className="admin-input w-28"
-              />
-              <button
-                type="button"
-                onClick={() => void saveRule(rule)}
-                disabled={(edits[rule.id] ?? rule.points) === rule.points}
-                className="admin-button min-h-11 px-4 text-xs disabled:opacity-40"
-              >
-                <Save size={14} /> Save
-              </button>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--color-brand-deep)]"
+                  checked={rule.earnOnline}
+                  onChange={() => void patchRule(rule.id, { earnOnline: !rule.earnOnline })}
+                />
+                Earn online
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--color-brand-deep)]"
+                  checked={rule.earnAtCounter}
+                  onChange={() => void patchRule(rule.id, { earnAtCounter: !rule.earnAtCounter })}
+                />
+                Earn at till
+              </label>
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="rounded-3xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-sm">
+        <h2 className="font-semibold">Purchase earn rate</h2>
+        <p className="mt-1 text-xs leading-5 text-[var(--color-ink-soft)]">
+          How many points GH₵1 earns before the tier multiplier, the smallest qualifying basket,
+          and how long points live. The till and the online shop read the same rule.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <label className="text-xs font-medium">
+            Points per GH₵1
+            <input
+              type="number"
+              min={0.01}
+              step={0.01}
+              className="admin-input mt-1"
+              value={purchaseRate}
+              onChange={(event) => setPurchaseRate(event.target.value)}
+            />
+          </label>
+          <label className="text-xs font-medium">
+            Minimum basket (GH₵)
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              className="admin-input mt-1"
+              value={purchaseMinimum}
+              onChange={(event) => setPurchaseMinimum(event.target.value)}
+            />
+          </label>
+          <label className="text-xs font-medium">
+            Points expire after (days)
+            <input
+              type="number"
+              min={1}
+              step={1}
+              placeholder="Never"
+              className="admin-input mt-1"
+              value={purchaseExpiry}
+              onChange={(event) => setPurchaseExpiry(event.target.value)}
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          onClick={() => void savePurchaseConfig()}
+          className="admin-button mt-3 min-h-11 px-4 text-xs"
+        >
+          <Save size={14} /> Save purchase rule
+        </button>
+      </div>
+
+      <div className="rounded-3xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-sm">
+        <h2 className="font-semibold">Tiers</h2>
+        <p className="mt-1 text-xs leading-5 text-[var(--color-ink-soft)]">
+          Lifetime points unlock a multiplier on future purchase earn. Highest qualifying tier wins.
+        </p>
+        {tiers.length === 0 ? (
+          <p className="mt-2 text-xs text-[var(--color-ink-soft)]">
+            No tiers yet — apply the loyalty migration, then add Bronze / Silver / Gold here.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {tiers.map((tier) => (
+              <li key={tier.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="font-semibold">{tier.name}</span>
+                <span className="text-xs text-[var(--color-ink-soft)]">
+                  from {tier.minLifetimePoints.toLocaleString()} pts · {tier.earnMultiplier}x{" "}
+                  {tier.isActive ? "" : "· off"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="rounded-3xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-sm">
+        <h2 className="font-semibold">Redemption</h2>
+        <p className="mt-1 text-xs leading-5 text-[var(--color-ink-soft)]">
+          What points are worth at checkout and how much of a basket they may cover. Till
+          redemption stays off until the POS flow is enabled.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <label className="text-xs font-medium">
+            Points per GH₵1
+            <input
+              type="number"
+              min={1}
+              step={1}
+              className="admin-input mt-1"
+              value={policy.pointsPerCedi}
+              onChange={(event) => setPolicy((current) => ({ ...current, pointsPerCedi: Number(event.target.value) }))}
+            />
+          </label>
+          <label className="text-xs font-medium">
+            Minimum to redeem
+            <input
+              type="number"
+              min={1}
+              step={1}
+              className="admin-input mt-1"
+              value={policy.minimumRedemptionPoints}
+              onChange={(event) => setPolicy((current) => ({ ...current, minimumRedemptionPoints: Number(event.target.value) }))}
+            />
+          </label>
+          <label className="text-xs font-medium">
+            Max share of basket (0–1)
+            <input
+              type="number"
+              min={0.01}
+              max={1}
+              step={0.01}
+              className="admin-input mt-1"
+              value={policy.maximumOrderShare}
+              onChange={(event) => setPolicy((current) => ({ ...current, maximumOrderShare: Number(event.target.value) }))}
+            />
+          </label>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium">
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--color-brand-deep)]"
+              checked={policy.allowOnline}
+              onChange={(event) => setPolicy((current) => ({ ...current, allowOnline: event.target.checked }))}
+            />
+            Redeem online
+          </label>
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--color-brand-deep)]"
+              checked={policy.allowAtCounter}
+              onChange={(event) => setPolicy((current) => ({ ...current, allowAtCounter: event.target.checked }))}
+            />
+            Redeem at till
+          </label>
+        </div>
+        <button
+          type="button"
+          onClick={() => void savePolicy()}
+          className="admin-button mt-3 min-h-11 px-4 text-xs"
+        >
+          <Save size={14} /> Save redemption rules
+        </button>
       </div>
     </section>
   );

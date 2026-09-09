@@ -40,6 +40,8 @@ const MIGRATIONS = [
   ["20260807_staff_login_domain.sql", "Data-driven staff sign-in domains"],
   ["20260807_customer_merge_and_schedule.sql", "members.user_id + campaign schedule"],
   ["20260808_featured_products_and_shipping_columns.sql", "products.is_featured + orders shipping columns"],
+  ["20260904_category_promotions_loyalty.sql", "promotion_categories + channel flags + loyalty tiers/policy"],
+  ["20260905_site_settings.sql", "site_settings + store_ready flag"],
 ];
 
 const VERIFY = `
@@ -76,11 +78,38 @@ select 'products.is_featured exists',
   from information_schema.columns
  where table_schema='public' and table_name='products' and column_name='is_featured'
 union all
-select 'orders shipping columns exist',
-       case when count(*) = 3 then 'OK' else 'FAILED' end
+ select 'orders shipping columns exist',
+        case when count(*) = 3 then 'OK' else 'FAILED' end
+   from information_schema.columns
+  where table_schema='public' and table_name='orders'
+    and column_name in ('shipping_status','shipped_at','delivered_at')
+union all
+select 'promotion_categories exists',
+       case when count(*) = 1 then 'OK' else 'FAILED' end
+  from information_schema.tables
+ where table_schema='public' and table_name='promotion_categories'
+union all
+select 'promotions channel columns exist',
+       case when count(*) = 2 then 'OK' else 'FAILED' end
   from information_schema.columns
- where table_schema='public' and table_name='orders'
-   and column_name in ('shipping_status','shipped_at','delivered_at');
+ where table_schema='public' and table_name='promotions'
+   and column_name in ('available_online','available_at_counter')
+union all
+select 'loyalty engine tables exist',
+       case when count(*) = 2 then 'OK' else 'FAILED' end
+  from information_schema.tables
+ where table_schema='public' and table_name in ('loyalty_tiers','loyalty_redemption_policy')
+union all
+select 'purchase earn reads loyalty_rules',
+       case when position('loyalty_rules' in pg_get_functiondef(p.oid)) > 0
+            then 'OK' else 'FAILED' end
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = 'finalize_checkout_reservation'
+union all
+select 'site_settings store_ready seeded',
+       case when count(*) = 1 then 'OK' else 'FAILED' end
+  from public.site_settings
+ where key = 'store_ready';
 `;
 
 function projectRef() {

@@ -36,6 +36,43 @@ export async function createServerSupabaseClient() {
   });
 }
 
+export function createRouteHandlerSupabaseClient(
+  request: Request,
+  onCookiesToSet: (cookies: Array<{ name: string; value: string; options: Record<string, unknown> }>) => void,
+) {
+  const { url, key } = credentials();
+  // Route handlers must attach cookies to the outgoing response directly.
+  // Using `cookies()` from next/headers can be unreliable for fetch-based
+  // Route Handler responses (NextResponse.json) – the browser never receives
+  // the Set-Cookie header and the client stays stuck on "Checking your code…".
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const requestCookies = cookieHeader
+    .split(";")
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .map((c) => {
+      const eq = c.indexOf("=");
+      return eq === -1
+        ? { name: c, value: "" }
+        : { name: c.slice(0, eq).trim(), value: decodeURIComponent(c.slice(eq + 1).trim()) };
+    });
+
+  return createServerClient(url, key, {
+    cookies: {
+      getAll: () => requestCookies,
+      setAll: (cookiesToSet) => {
+        onCookiesToSet(
+          cookiesToSet.map(({ name, value, options }) => ({
+            name,
+            value,
+            options: (options as Record<string, unknown>) ?? {},
+          })),
+        );
+      },
+    },
+  });
+}
+
 export async function tryCreateServerSupabaseClient() {
   try {
     return await createServerSupabaseClient();

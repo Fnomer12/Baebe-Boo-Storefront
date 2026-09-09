@@ -12,6 +12,7 @@ export type CounterSaleInput = {
   paymentMethod: CounterPaymentMethod;
   customerName?: string;
   customerPhone?: string;
+  customerUserId?: string | null;
   idempotencyKey?: string | null;
 };
 

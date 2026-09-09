@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import type { CounterCartLine, CounterPaymentMethod } from "@/domain/counter/catalog";
@@ -7,6 +8,8 @@ import { cartTotals } from "@/domain/counter/cart";
 import { formatCedis } from "@/domain/counter/money";
 import CounterPaymentSelector from "./CounterPaymentSelector";
 import { AdminHint } from "@/components/admin/AdminHint";
+
+type MemberMatch = { userId: string; name: string; email: string | null; phone: string | null };
 
 /**
  * The cart is its own component rather than an `AdminModal`: that modal is
@@ -20,6 +23,7 @@ export default function CounterCartPanel({
   paymentMethod,
   customerName,
   customerPhone,
+  customerUserId,
   submitting,
   error,
   onClose,
@@ -28,6 +32,7 @@ export default function CounterCartPanel({
   onPaymentMethodChange,
   onCustomerNameChange,
   onCustomerPhoneChange,
+  onCustomerUserIdChange,
   onComplete,
 }: {
   open: boolean;
@@ -35,6 +40,7 @@ export default function CounterCartPanel({
   paymentMethod: CounterPaymentMethod;
   customerName: string;
   customerPhone: string;
+  customerUserId: string | null;
   submitting: boolean;
   error: string;
   onClose: () => void;
@@ -43,8 +49,34 @@ export default function CounterCartPanel({
   onPaymentMethodChange: (method: CounterPaymentMethod) => void;
   onCustomerNameChange: (value: string) => void;
   onCustomerPhoneChange: (value: string) => void;
+  onCustomerUserIdChange: (userId: string | null, displayName: string) => void;
   onComplete: () => void;
 }) {
+  const [memberQuery, setMemberQuery] = useState("");
+  const [memberMatches, setMemberMatches] = useState<MemberMatch[]>([]);
+  const [memberSearching, setMemberSearching] = useState(false);
+
+  async function searchMembers(query: string) {
+    setMemberQuery(query);
+    onCustomerUserIdChange(null, "");
+    if (query.trim().length < 3) {
+      setMemberMatches([]);
+      return;
+    }
+    setMemberSearching(true);
+    try {
+      const response = await fetch(`/api/counter/customers/search?q=${encodeURIComponent(query.trim())}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      setMemberMatches(Array.isArray(payload.customers) ? payload.customers : []);
+    } catch {
+      setMemberMatches([]);
+    } finally {
+      setMemberSearching(false);
+    }
+  }
+
   if (!open) return null;
   const totals = cartTotals(lines);
 
@@ -190,6 +222,72 @@ export default function CounterCartPanel({
               inputMode="tel"
               autoComplete="off"
             />
+
+            <span className="admin-label mt-4 flex items-center gap-1.5">
+              <label htmlFor="counter-member-search">Member account (optional)</label>
+              <AdminHint label="What is Member account?">
+                Attach an account holder so till promos for members and loyalty points follow
+                them. Search by phone, email or name — walk-in sales without an account earn
+                nothing.
+              </AdminHint>
+            </span>
+            {customerUserId ? (
+              <div className="mt-1 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2">
+                <p className="min-w-0 flex-1 truncate text-xs font-semibold text-emerald-900">
+                  {customerName || "Member attached"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCustomerUserIdChange(null, "");
+                    setMemberMatches([]);
+                    setMemberQuery("");
+                  }}
+                  className="text-xs font-semibold text-emerald-900 underline underline-offset-4"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  id="counter-member-search"
+                  className="admin-input"
+                  value={memberQuery}
+                  onChange={(event) => void searchMembers(event.target.value)}
+                  placeholder="Search phone, email or name…"
+                  autoComplete="off"
+                />
+                {memberSearching && (
+                  <p className="mt-1 text-xs text-[var(--color-ink-soft)]">Searching…</p>
+                )}
+                {!memberSearching && memberQuery.trim().length >= 3 && memberMatches.length === 0 && (
+                  <p className="mt-1 text-xs text-[var(--color-ink-soft)]">No account matches.</p>
+                )}
+                {memberMatches.length > 0 && (
+                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                    {memberMatches.map((match) => (
+                      <li key={match.userId}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCustomerUserIdChange(match.userId, match.name);
+                            setMemberMatches([]);
+                            setMemberQuery("");
+                          }}
+                          className="flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left text-xs hover:bg-[var(--color-cream)]"
+                        >
+                          <span className="min-w-0 flex-1 truncate font-semibold">{match.name}</span>
+                          <span className="shrink-0 text-[var(--color-ink-soft)]">
+                            {match.phone || match.email || ""}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
 
             <p className="admin-label mt-4">Payment</p>
             <CounterPaymentSelector

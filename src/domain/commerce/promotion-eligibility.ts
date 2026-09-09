@@ -35,6 +35,8 @@ export type EligiblePromotion = {
   kind: PromotionKind;
   value: number;
   stackable: boolean;
+  /** Matching-lines subtotal for targeted promos; absent means whole basket. */
+  eligibleSubtotal?: number;
 };
 
 type EligibilityResult =

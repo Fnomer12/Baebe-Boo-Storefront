@@ -54,6 +54,7 @@ export default function SellWorkspace() {
   const [paymentMethod, setPaymentMethod] = useState<CounterPaymentMethod>("cash");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerUserId, setCustomerUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [saleError, setSaleError] = useState("");
   /**
@@ -167,6 +168,7 @@ export default function SellWorkspace() {
           paymentMethod,
           customerName: customerName.trim() || undefined,
           customerPhone: customerPhone.trim() || undefined,
+          customerUserId: customerUserId || undefined,
           idempotencyKey: saleKey,
         }),
       });
@@ -182,6 +184,7 @@ export default function SellWorkspace() {
       setLines([]);
       setCustomerName("");
       setCustomerPhone("");
+      setCustomerUserId(null);
       setCartOpen(false);
       setSaleKey(newSaleKey());
     } catch (completeError) {
@@ -370,6 +373,7 @@ export default function SellWorkspace() {
         paymentMethod={paymentMethod}
         customerName={customerName}
         customerPhone={customerPhone}
+        customerUserId={customerUserId}
         submitting={submitting}
         error={saleError}
         onClose={() => setCartOpen(false)}
@@ -380,6 +384,10 @@ export default function SellWorkspace() {
         onPaymentMethodChange={setPaymentMethod}
         onCustomerNameChange={setCustomerName}
         onCustomerPhoneChange={setCustomerPhone}
+        onCustomerUserIdChange={(userId, displayName) => {
+          setCustomerUserId(userId);
+          if (displayName) setCustomerName(displayName);
+        }}
         onComplete={() => void completeSale()}
       />
     </div>

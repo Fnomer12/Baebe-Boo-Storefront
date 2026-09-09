@@ -70,6 +70,17 @@ const productIdsSchema = z
   .max(500, { error: "Select fewer products." })
   .optional();
 
+const categoryNamesSchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .min(1, { error: "That category could not be recognised." })
+      .max(120, { error: "That category name is too long." }),
+  )
+  .max(20, { error: "Select fewer categories." })
+  .optional();
+
 const isBlank = (value: unknown) =>
   value === null || (typeof value === "string" && value.trim().length === 0);
 
@@ -105,6 +116,8 @@ const sharedOptionalFields = {
   code: blankToUndefined(codeSchema),
   productIds: productIdsSchema,
   excludedProductIds: productIdsSchema,
+  categories: categoryNamesSchema,
+  excludedCategories: categoryNamesSchema,
 };
 
 type ShapeToCheck = {
@@ -115,6 +128,12 @@ type ShapeToCheck = {
   endsAt?: string | null;
   productIds?: readonly string[];
   excludedProductIds?: readonly string[];
+  categories?: readonly string[];
+  excludedCategories?: readonly string[];
+  availableOnline?: boolean;
+  availableAtCounter?: boolean;
+  automatic?: boolean;
+  code?: string | null;
 };
 
 /**
@@ -156,6 +175,24 @@ export function promotionShapeIssues(input: ShapeToCheck): Record<string, string
     issues.excludedProductIds =
       "A product cannot be both included and excluded. Remove it from one of the lists.";
   }
+  const excludedCategories = new Set(
+    (input.excludedCategories ?? []).map((entry) => entry.trim().toLowerCase()),
+  );
+  if ((input.categories ?? []).some((entry) => excludedCategories.has(entry.trim().toLowerCase()))) {
+    issues.excludedCategories =
+      "A category cannot be both included and excluded. Remove it from one of the lists.";
+  }
+  // Counter promos are automatic-only: the till has no code field, so a coded
+  // promo flagged for the counter would be unreachable there.
+  if (input.availableAtCounter && !input.automatic && !input.code) {
+    // Automatic-off + no code is already unreachable everywhere (existing
+    // `unreachablePromotionIssue`); only flag the counter-specific case where
+    // a code exists but the till cannot take it.
+  }
+  if (input.availableAtCounter && input.code && !input.automatic) {
+    issues.availableAtCounter =
+      "The till applies offers automatically and has no code box. Switch on automatic as well, or keep this offer online-only.";
+  }
 
   return issues;
 }
@@ -174,6 +211,8 @@ export const promotionCreateSchema = z
     status: statusSchema.default("draft"),
     stackable: z.boolean().default(false),
     automatic: z.boolean().default(false),
+    availableOnline: z.boolean().default(true),
+    availableAtCounter: z.boolean().default(false),
     ...sharedOptionalFields,
   })
   .superRefine((input, ctx) => {
@@ -200,6 +239,8 @@ export const promotionPatchSchema = z
     status: statusSchema.optional(),
     stackable: z.boolean().optional(),
     automatic: z.boolean().optional(),
+    availableOnline: z.boolean().optional(),
+    availableAtCounter: z.boolean().optional(),
     description: clearable(z.string().trim().max(2000)),
     startsAt: clearableIsoDateTime,
     endsAt: clearableIsoDateTime,
@@ -209,6 +250,8 @@ export const promotionPatchSchema = z
     code: clearable(codeSchema),
     productIds: productIdsSchema,
     excludedProductIds: productIdsSchema,
+    categories: categoryNamesSchema,
+    excludedCategories: categoryNamesSchema,
   })
   .superRefine((input, ctx) =>
     checkPromotionShape(
@@ -284,6 +327,9 @@ export type StoredPromotion = {
   value: number;
   status: PromotionStatus;
   automatic: boolean;
+  /** Optional until the channel migration lands; absent means online-only. */
+  availableOnline?: boolean;
+  availableAtCounter?: boolean;
   startsAt: string | null;
   endsAt: string | null;
   code: string | null;
@@ -309,6 +355,14 @@ export function mergePromotionPatch(
     value: promotionType === "free_shipping" ? 0 : value,
     status: patch.status ?? current.status,
     automatic: patch.automatic ?? current.automatic,
+    // Channel flags stay absent when neither side names them, so rows stored
+    // before the channel migration round-trip unchanged.
+    ...(patch.availableOnline !== undefined || current.availableOnline !== undefined
+      ? { availableOnline: patch.availableOnline ?? current.availableOnline ?? true }
+      : {}),
+    ...(patch.availableAtCounter !== undefined || current.availableAtCounter !== undefined
+      ? { availableAtCounter: patch.availableAtCounter ?? current.availableAtCounter ?? false }
+      : {}),
     startsAt: patch.startsAt === undefined ? current.startsAt : patch.startsAt,
     endsAt: patch.endsAt === undefined ? current.endsAt : patch.endsAt,
     code: patch.code === undefined ? current.code : patch.code,
@@ -335,7 +389,9 @@ export function promotionUpdateIssues(
     patch.status !== undefined ||
     patch.automatic !== undefined ||
     patch.code !== undefined ||
-    patch.endsAt !== undefined;
+    patch.endsAt !== undefined ||
+    patch.availableOnline !== undefined ||
+    patch.availableAtCounter !== undefined;
 
   const issues = promotionShapeIssues({
     promotionType: merged.promotionType,
@@ -344,6 +400,12 @@ export function promotionUpdateIssues(
     endsAt: merged.endsAt,
     productIds: patch.productIds,
     excludedProductIds: patch.excludedProductIds,
+    categories: patch.categories,
+    excludedCategories: patch.excludedCategories,
+    availableOnline: merged.availableOnline ?? true,
+    availableAtCounter: merged.availableAtCounter ?? false,
+    automatic: merged.automatic,
+    code: merged.code,
   });
   if (touchesReach || patch.promotionType !== undefined) {
     // Switching on a `fixed_price` or `bundle` row would put "This promotion

@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Mail, ShieldCheck } from "lucide-react";
 
 const storageKey = "baebe_login_request";
@@ -11,7 +10,6 @@ type Step = "email" | "code";
 type PendingRequest = { requestId: string; email: string; resendAt: number };
 
 export default function EmailCodeSignIn({ next }: { next?: string }) {
-  const router = useRouter();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -107,28 +105,45 @@ export default function EmailCodeSignIn({ next }: { next?: string }) {
       submittedCode.current = value;
       setPending(true);
       setError("");
-      const response = await fetch("/api/auth/login-code/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, code: value }),
-      }).catch(() => null);
+      let response: Response | null = null;
+      try {
+        response = await fetch("/api/auth/login-code/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId, code: value }),
+        });
+      } catch {
+        response = null;
+      }
 
       if (response?.ok) {
-        const payload = (await response.json()) as { redirectTo: string };
+        const payload = (await response.json().catch(() => null)) as { redirectTo?: string } | null;
         window.sessionStorage.removeItem(storageKey);
-        const target = next?.startsWith("/") ? next : payload.redirectTo;
-        router.replace(target);
-        router.refresh();
+        const raw = next?.startsWith("/") ? next : payload?.redirectTo;
+        const target = raw?.startsWith("/") ? raw : "/account";
+        // Hard navigation guarantees the browser sends the freshly set
+        // httpOnly auth cookies. router.replace + router.refresh was leaving
+        // users stuck on "Checking your code…" when the fetch's Set-Cookie
+        // never reached the next RSC render.
+        window.location.assign(target);
         return;
       }
 
       setPending(false);
       const payload = await response?.json().catch(() => null);
-      setError(payload?.message || "That code did not work. Please try again.");
+      const message =
+        payload?.message ||
+        (!response
+          ? "We could not reach the server. Check your connection and try again."
+          : "That code did not work. Please try again.");
+      setError(message);
       setCode("");
-      codeInput.current?.focus();
+      // Already submitted this value – allow the user to retype the same
+      // digits without the auto-submit guard blocking it.
+      submittedCode.current = "";
+      window.setTimeout(() => codeInput.current?.focus(), 0);
     },
-    [next, pending, requestId, router],
+    [next, pending, requestId],
   );
 
   // Auto-submit once the sixth digit lands, but never twice for the same value —

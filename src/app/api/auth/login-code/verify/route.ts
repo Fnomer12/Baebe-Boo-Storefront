@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyLoginCode } from "@/lib/auth/login-code-service";
+import { createRouteHandlerSupabaseClient } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
 
 // No email here: the request id already binds the attempt to the browser that
@@ -26,10 +27,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Enter the 6-digit code from your email." }, { status: 400 });
   }
 
-  const result = await verifyLoginCode(parsed.data.requestId, parsed.data.code);
+  // Use a response-bound Supabase client so verifyOtp's Set-Cookie headers
+  // are attached to the JSON response the browser is actually fetching.
+  // The previous `cookies()`-based client could silently fail to write cookies
+  // in Route Handlers, leaving the user stuck on "Checking your code…".
+  const pendingCookies: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
+  const supabase = createRouteHandlerSupabaseClient(request, (cookies) => pendingCookies.push(...cookies));
+
+  const result = await verifyLoginCode(parsed.data.requestId, parsed.data.code, supabase);
 
   if (result.status === "verified") {
-    return NextResponse.json({ redirectTo: "/account" });
+    const success = NextResponse.json({ redirectTo: "/account" });
+    for (const c of pendingCookies) {
+      success.cookies.set(c.name, c.value, c.options);
+    }
+    return success;
   }
   if (result.status === "staff") {
     return NextResponse.json(

@@ -103,6 +103,8 @@ export type PromotionDraft = {
   code?: string;
   automatic: boolean;
   stackable: boolean;
+  availableOnline?: boolean;
+  availableAtCounter?: boolean;
   status: PromotionStatus;
   startsAt?: string;
   endsAt?: string;
@@ -110,6 +112,8 @@ export type PromotionDraft = {
   perCustomerLimit?: number;
   productIds?: readonly string[];
   excludedProductIds?: readonly string[];
+  categories?: readonly string[];
+  excludedCategories?: readonly string[];
 };
 
 export type PromotionPayload = {
@@ -125,9 +129,13 @@ export type PromotionPayload = {
   perCustomerLimit?: number;
   stackable: boolean;
   automatic: boolean;
+  availableOnline: boolean;
+  availableAtCounter: boolean;
   code?: string;
   productIds: string[];
   excludedProductIds: string[];
+  categories: string[];
+  excludedCategories: string[];
 };
 
 export function toPromotionPayload(draft: PromotionDraft): PromotionPayload {
@@ -148,9 +156,13 @@ export function toPromotionPayload(draft: PromotionDraft): PromotionPayload {
     perCustomerLimit: draft.perCustomerLimit,
     stackable: draft.stackable,
     automatic: draft.automatic,
+    availableOnline: draft.availableOnline ?? true,
+    availableAtCounter: draft.availableAtCounter ?? false,
     code: code || undefined,
     productIds: [...(draft.productIds ?? [])],
     excludedProductIds: [...(draft.excludedProductIds ?? [])],
+    categories: [...(draft.categories ?? [])],
+    excludedCategories: [...(draft.excludedCategories ?? [])],
   };
 }
 

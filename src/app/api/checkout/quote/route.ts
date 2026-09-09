@@ -44,10 +44,15 @@ export async function POST(request: Request) {
     const quote = await quoteCheckoutPromotions({
       lines: basket.variants.map((variant) => ({
         variantId: variant.id,
+        productId: variant.productId,
+        category: variant.productCategory,
         unitPrice: variant.price,
         quantity: variant.quantity,
       })),
       productIds: [...new Set(basket.variants.map((variant) => variant.productId))],
+      productCategories: Object.fromEntries(
+        basket.variants.map((variant) => [variant.productId, variant.productCategory]),
+      ),
       deliveryFee: basket.deliveryFee,
       promotionCode: typeof body.promotionCode === "string" ? body.promotionCode : null,
       voucherCode: typeof body.voucherCode === "string" ? body.voucherCode : null,

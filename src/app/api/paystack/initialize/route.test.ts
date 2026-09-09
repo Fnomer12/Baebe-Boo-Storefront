@@ -37,6 +37,8 @@ import { POST } from "./route";
 
 /** Every row handed to `.insert()`, keyed by table, for assertions below. */
 let inserts: Record<string, unknown[]>;
+/** What `site_settings.store_ready` reads as. Fail-open default: live. */
+let storeReady: boolean | "error";
 
 function basket(branchCount: number) {
   const variants = Array.from({ length: branchCount }, (_, index) => ({
@@ -71,12 +73,21 @@ function basket(branchCount: number) {
 
 function mockSupabase() {
   inserts = {};
+  storeReady = true;
   let allocationRow = 0;
   fromMock.mockImplementation((table: string) => {
     const record = (rows: unknown) => {
       inserts[table] = [...(inserts[table] || []), ...(Array.isArray(rows) ? rows : [rows])];
     };
     return {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () =>
+            storeReady === "error"
+              ? { data: null, error: new Error("db down") }
+              : { data: { value: storeReady }, error: null },
+        }),
+      }),
       insert: (rows: unknown) => {
         record(rows);
         if (table === "orders") {
@@ -219,6 +230,27 @@ describe("paystack initialize", () => {
     const fees = deliveryFeesWritten();
     expect(fees).toEqual([8.34, 8.33, 8.33]);
     expect(fees.reduce((sum, fee) => sum + fee, 0)).toBeCloseTo(25, 2);
+  });
+
+  it("refuses payment while the store is getting ready, writing nothing", async () => {
+    storeReady = false;
+
+    const response = await POST(checkoutRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.status).toBe(false);
+    expect(body.message).toMatch(/getting ready/i);
+    expect(inserts.orders || []).toHaveLength(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fails open to live when the readiness flag cannot be read", async () => {
+    storeReady = "error";
+
+    const response = await POST(checkoutRequest());
+
+    expect(response.status).toBe(200);
   });
 
   it("charges nothing for delivery on a click-and-collect order", async () => {

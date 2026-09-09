@@ -13,10 +13,12 @@ import {
   Package,
   Pencil,
   Plus,
+  Printer,
   RotateCcw,
   Save,
   SlidersHorizontal,
   Star,
+  Store,
   Trash2,
 } from "lucide-react";
 import {
@@ -38,6 +40,7 @@ import {
   AdminFilterBar,
 } from "@/components/admin/AdminWorkspacePrimitives";
 import ProductWizardModal, { type WizardMode } from "@/components/admin/products/ProductWizardModal";
+import LabelPrintModal from "@/components/admin/products/LabelPrintModal";
 
 type ApiRecord = Record<string, unknown>;
 type ProductResponse = {
@@ -160,6 +163,7 @@ export default function ProductManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editor, setEditor] = useState<{ mode: WizardMode; productId: string | null } | null>(null);
+  const [showLabels, setShowLabels] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -245,14 +249,25 @@ export default function ProductManagement() {
           </p>
         </div>
         <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => setEditor({ mode: "create", productId: null })}
-            className="ml-auto flex min-h-11 w-fit items-center gap-2 rounded-2xl bg-[#101820] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d2b36] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28637d] focus-visible:ring-offset-2"
-          >
-            <Plus size={16} />
-            Add product
-          </button>
+          <div className="ml-auto flex w-fit flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowLabels(true)}
+              className="flex min-h-11 items-center gap-2 rounded-2xl border border-black/[0.07] bg-white px-4 py-3 text-sm font-semibold text-black/70 shadow-sm transition hover:bg-black/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28637d] focus-visible:ring-offset-2"
+            >
+              <Printer size={16} />
+              Print labels
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditor({ mode: "create", productId: null })}
+              className="flex min-h-11 items-center gap-2 rounded-2xl bg-[#101820] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d2b36] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28637d] focus-visible:ring-offset-2"
+            >
+              <Plus size={16} />
+              Add product
+            </button>
+          </div>
+          <StoreLiveToggle />
           <div className="grid grid-cols-3 gap-2 text-center">
             <Metric label="Products" value={total} />
             <Metric label="Active" value={products.filter((product) => product.active).length} />
@@ -357,6 +372,7 @@ export default function ProductManagement() {
           onSaved={load}
         />
       )}
+      {showLabels && <LabelPrintModal onClose={() => setShowLabels(false)} />}
     </div>
   );
 }
@@ -366,6 +382,104 @@ function Metric({ label, value }: { label: string; value: number }) {
     <div className="min-w-20 rounded-2xl border border-black/[0.07] bg-white px-3 py-3 shadow-sm">
       <strong className="block text-lg">{value}</strong>
       <span className="text-[10px] font-semibold uppercase tracking-wide text-black/40">{label}</span>
+    </div>
+  );
+}
+
+/**
+ * The "Store live" switch.
+ *
+ * Off = every visitor to the main website sees a banner that the store is
+ * still getting ready. On = no banner. A missing/unreadable setting reads as
+ * live, so the shop never alarms customers over an unapplied migration — the
+ * switch simply shows an error instead of flipping.
+ */
+function StoreLiveToggle() {
+  const [ready, setReady] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/admin/store-settings", { cache: "no-store" });
+        const payload = await response.json().catch(() => null);
+        if (!cancelled && response.ok && typeof payload?.storeReady === "boolean") {
+          setReady(payload.storeReady);
+        } else if (!cancelled) {
+          setFailed(true);
+        }
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function flip() {
+    if (ready === null || saving) return;
+    const next = !ready;
+    setSaving(true);
+    setFailed(false);
+    try {
+      const response = await fetch("/api/admin/store-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeReady: next }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || typeof payload?.storeReady !== "boolean") throw new Error("save failed");
+      setReady(payload.storeReady);
+    } catch {
+      setFailed(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="ml-auto flex w-fit flex-col gap-1">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={ready === true}
+        aria-label="Store live"
+        title={
+          ready === false
+            ? "Store is hidden behind a “getting ready” banner. Switch on to go live."
+            : "Store is live. Switch off to show a “getting ready” banner."
+        }
+        onClick={() => void flip()}
+        disabled={ready === null || saving}
+        className={`flex min-h-11 items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition disabled:opacity-50 ${
+          ready === false
+            ? "border-amber-300 bg-amber-100 text-amber-900"
+            : "border-black/[0.07] bg-white text-black/70 hover:bg-black/[0.03]"
+        }`}
+      >
+        <Store size={16} aria-hidden="true" />
+        {ready === null ? "Store status…" : ready ? "Store live" : "Not ready — banner on"}
+        <span
+          aria-hidden="true"
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+            ready ? "bg-emerald-500" : "bg-black/20"
+          }`}
+        >
+          <span
+            className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
+              ready ? "translate-x-5" : "translate-x-0.5"
+            }`}
+          />
+        </span>
+      </button>
+      {failed && (
+        <p role="alert" className="text-right text-xs font-medium text-red-700">
+          Store status could not be {ready === null ? "loaded" : "saved"}. Try again.
+        </p>
+      )}
     </div>
   );
 }

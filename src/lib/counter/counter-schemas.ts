@@ -20,6 +20,12 @@ export const counterSaleCreateSchema = z.object({
   customerName: z.string().trim().max(120).optional(),
   customerPhone: z.string().trim().max(24).optional(),
   /**
+   * Account holder the sale earns loyalty for. Resolved via the member lookup
+   * (phone/email → customer_profiles.user_id); never free-text, so a cashier
+   * cannot attach a sale to an arbitrary account.
+   */
+  customerUserId: z.uuid().optional(),
+  /**
    * Supplied by the till so a retried "Complete sale" returns the original
    * order instead of ringing up a second one.
    */

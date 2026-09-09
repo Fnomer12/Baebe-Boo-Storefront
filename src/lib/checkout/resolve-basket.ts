@@ -12,6 +12,7 @@ export type CheckoutItemInput = {
 export type ResolvedVariant = {
   id: string;
   productId: string;
+  productCategory: string | null;
   price: number;
   /**
    * Captured at checkout so `report_daily_profit` computes COGS against the
@@ -22,7 +23,7 @@ export type ResolvedVariant = {
   quantity: number;
 };
 
-type ProductRow = { id: string; name: string; price: number | string };
+type ProductRow = { id: string; name: string; price: number | string; category: string | null };
 type VariantRow = {
   id: string;
   product_id: string;
@@ -90,7 +91,7 @@ export async function resolveCheckoutBasket(input: {
   const productIds = [...new Set(input.items.map((item) => item.productId))];
   const [{ data: productsData, error: productError }, { data: variantsData, error: variantError }] =
     await Promise.all([
-      supabaseAdmin.from("products").select("id,name,price").in("id", productIds).eq("is_active", true),
+      supabaseAdmin.from("products").select("id,name,price,category").in("id", productIds).eq("is_active", true),
       supabaseAdmin.from("product_variants").select("id,product_id,price,cost_price,is_default").in("product_id", productIds).eq("is_active", true),
     ]);
   const products = (productsData || []) as ProductRow[];
@@ -100,6 +101,7 @@ export async function resolveCheckoutBasket(input: {
   }
 
   const aggregated = new Map<string, ResolvedVariant>();
+  const categoryByProduct = new Map(products.map((product) => [product.id, product.category || null]));
   for (const item of input.items) {
     const candidates = variantRows.filter((variant) => variant.product_id === item.productId);
     const selected = item.variantId
@@ -114,6 +116,7 @@ export async function resolveCheckoutBasket(input: {
     aggregated.set(selected.id, {
       id: selected.id,
       productId: selected.product_id,
+      productCategory: categoryByProduct.get(selected.product_id) || null,
       price: Number(selected.price),
       costPrice: Number(selected.cost_price || 0),
       quantity,

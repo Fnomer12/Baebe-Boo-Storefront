@@ -2,6 +2,9 @@ export type PricedLine = {
   variantId: string;
   unitPrice: number;
   quantity: number;
+  /** Product id + free-text category for targeting. Optional so old callers keep working. */
+  productId?: string;
+  category?: string | null;
 };
 
 export type Promotion = {
@@ -9,6 +12,15 @@ export type Promotion = {
   kind: "percentage" | "fixed";
   value: number;
   stackable: boolean;
+  /**
+   * What this promotion may discount. Defaults to the whole basket.
+   *
+   * Category/product targeting sets this to the matching-lines subtotal, so a
+   * "10% off Feeding" promo with GH₵150 of Feeding + GH₵500 of Toys takes 10%
+   * off GH₵150, not off GH₵650. A fixed GH₵50 off is capped at the eligible
+   * portion, never the whole cart.
+   */
+  eligibleSubtotal?: number;
 };
 
 type QuoteOrderInput = {
@@ -31,11 +43,12 @@ type OrderQuote = {
 const money = (value: number) => Math.round(value * 100) / 100;
 
 function promotionDiscount(promotion: Promotion, subtotal: number) {
+  const base = promotion.eligibleSubtotal ?? subtotal;
   const raw =
     promotion.kind === "percentage"
-      ? subtotal * (promotion.value / 100)
+      ? base * (promotion.value / 100)
       : promotion.value;
-  return money(Math.min(subtotal, Math.max(0, raw)));
+  return money(Math.min(base, Math.max(0, raw)));
 }
 
 export function quoteOrder(input: QuoteOrderInput): OrderQuote {

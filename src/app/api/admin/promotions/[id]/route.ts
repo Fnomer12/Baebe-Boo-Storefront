@@ -5,7 +5,7 @@ import {
   promotionUpdateIssues,
   type StoredPromotion,
 } from "@/domain/commerce/promotion-schemas";
-import { promotionProductRows } from "@/domain/commerce/promotion-targeting";
+import { promotionCategoryRows, promotionProductRows } from "@/domain/commerce/promotion-targeting";
 import { fieldErrors } from "@/lib/admin/schema-helpers";
 import { authorizeAdminApi } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -24,6 +24,8 @@ type PromotionRow = {
   value: number | string;
   status: "draft" | "active" | "paused" | "expired";
   automatic: boolean;
+  available_online?: boolean | null;
+  available_at_counter?: boolean | null;
   starts_at: string | null;
   ends_at: string | null;
 };
@@ -56,18 +58,33 @@ export async function PATCH(
   }
   const patch = parsed.data;
 
-  const { data: existing, error: lookupError } = await supabaseAdmin
-    .from("promotions")
-    .select("id, promotion_type, value, status, automatic, starts_at, ends_at")
-    .eq("id", id)
-    .maybeSingle();
-  if (lookupError) {
-    return NextResponse.json({ message: "Promotion could not be loaded." }, { status: 500 });
+  let row: PromotionRow;
+  {
+    const { data: existing, error: lookupError } = await supabaseAdmin
+      .from("promotions")
+      .select("id, promotion_type, value, status, automatic, available_online, available_at_counter, starts_at, ends_at")
+      .eq("id", id)
+      .maybeSingle();
+    if (!lookupError && existing) {
+      row = existing as PromotionRow;
+    } else if (!lookupError && !existing) {
+      return NextResponse.json({ message: "Promotion not found." }, { status: 404 });
+    } else {
+      // Channel columns missing (migration unapplied): retry the legacy shape.
+      const legacy = await supabaseAdmin
+        .from("promotions")
+        .select("id, promotion_type, value, status, automatic, starts_at, ends_at")
+        .eq("id", id)
+        .maybeSingle();
+      if (legacy.error) {
+        return NextResponse.json({ message: "Promotion could not be loaded." }, { status: 500 });
+      }
+      if (!legacy.data) {
+        return NextResponse.json({ message: "Promotion not found." }, { status: 404 });
+      }
+      row = legacy.data as PromotionRow;
+    }
   }
-  if (!existing) {
-    return NextResponse.json({ message: "Promotion not found." }, { status: 404 });
-  }
-  const row = existing as PromotionRow;
 
   // THE BUG: this read the first row of an unordered, unfiltered select while
   // the list endpoint skips `is_active = false` rows. The two handlers could
@@ -90,6 +107,8 @@ export async function PATCH(
     value: Number(row.value),
     status: row.status,
     automatic: row.automatic,
+    availableOnline: row.available_online !== false,
+    availableAtCounter: row.available_at_counter === true,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     code: currentCode,
@@ -175,6 +194,8 @@ export async function PATCH(
   if (patch.status !== undefined) update.status = patch.status;
   if (patch.stackable !== undefined) update.stackable = patch.stackable;
   if (patch.automatic !== undefined) update.automatic = patch.automatic;
+  if (patch.availableOnline !== undefined) update.available_online = patch.availableOnline;
+  if (patch.availableAtCounter !== undefined) update.available_at_counter = patch.availableAtCounter;
   if (patch.startsAt !== undefined) update.starts_at = patch.startsAt;
   if (patch.endsAt !== undefined) update.ends_at = patch.endsAt;
   if (patch.minimumOrderAmount !== undefined) update.minimum_order_amount = patch.minimumOrderAmount;
@@ -190,7 +211,20 @@ export async function PATCH(
     .update(update)
     .eq("id", id);
   if (updateError) {
-    return NextResponse.json({ message: "Promotion could not be saved." }, { status: 500 });
+    // Channel columns missing (migration unapplied): retry without them.
+    if (
+      (patch.availableOnline !== undefined || patch.availableAtCounter !== undefined) &&
+      /available_online|available_at_counter/i.test(updateError.message || "")
+    ) {
+      delete update.available_online;
+      delete update.available_at_counter;
+      const { error: retryError } = await supabaseAdmin.from("promotions").update(update).eq("id", id);
+      if (retryError) {
+        return NextResponse.json({ message: "Promotion could not be saved." }, { status: 500 });
+      }
+    } else {
+      return NextResponse.json({ message: "Promotion could not be saved." }, { status: 500 });
+    }
   }
 
   if (codeChanged) {
@@ -256,6 +290,39 @@ export async function PATCH(
           },
           { status: 400 },
         );
+      }
+    }
+  }
+
+  if (patch.categories !== undefined || patch.excludedCategories !== undefined) {
+    const { error: clearCategoryError } = await supabaseAdmin
+      .from("promotion_categories")
+      .delete()
+      .eq("promotion_id", id);
+    if (clearCategoryError) {
+      // Missing table (migration unapplied): categories simply do not persist
+      // yet, but the rest of the promotion already saved.
+      if (!/relation .* does not exist|promotion_categories/i.test(clearCategoryError.message || "")) {
+        return NextResponse.json(
+          { message: "The promotion saved, but the categories it applies to did not." },
+          { status: 500 },
+        );
+      }
+    } else {
+      const categoryRows = promotionCategoryRows(id, patch);
+      if (categoryRows.length > 0) {
+        const { error: categoryError } = await supabaseAdmin
+          .from("promotion_categories")
+          .insert(categoryRows);
+        if (categoryError) {
+          return NextResponse.json(
+            {
+              message: "The promotion saved, but the categories it applies to did not.",
+              errors: { categories: "Those categories could not be saved. Reload and try again." },
+            },
+            { status: 400 },
+          );
+        }
       }
     }
   }

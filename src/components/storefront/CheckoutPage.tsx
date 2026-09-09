@@ -136,6 +136,12 @@ export default function CheckoutPage() {
   const [quoteRevision, setQuoteRevision] = useState(0);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  /**
+   * Fail-open: checkout stays enabled until the status endpoint affirmatively
+   * says the shop is getting ready. A broken status check must never block
+   * real customers from paying.
+   */
+  const [storeLive, setStoreLive] = useState(true);
 
   const showMessage = useCallback((text: string) => {
     setMessage(text);
@@ -153,6 +159,17 @@ export default function CheckoutPage() {
         setCartLoaded(true);
       }
     });
+    // The "Store live" switch gates checkout: while the shop is getting ready
+    // the Pay button is disabled and the server refuses payment anyway.
+    void (async () => {
+      try {
+        const response = await fetch("/api/storefront/status", { cache: "no-store" });
+        const payload = (await response.json().catch(() => null)) as { ready?: unknown } | null;
+        if (response.ok && payload && payload.ready === false) setStoreLive(false);
+      } catch {
+        // Fail open — checkout stays enabled.
+      }
+    })();
   }, []);
 
   // Prefill from the signed-in customer's account. Functional updates fill
@@ -386,6 +403,10 @@ export default function CheckoutPage() {
   };
 
   const createOnlineOrder = async () => {
+    if (!storeLive) {
+      showMessage("Our online store is still getting ready — checkout is paused for now.");
+      return;
+    }
     if (!validateCheckout()) return;
 
     const cartSnapshot = [...cartItems];
@@ -538,7 +559,7 @@ export default function CheckoutPage() {
     }
   };
 
-  const payDisabled = placingOrder || quoteLoading || !activeQuote || Boolean(checkoutOptionsError);
+  const payDisabled = placingOrder || quoteLoading || !activeQuote || Boolean(checkoutOptionsError) || !storeLive;
 
   return (
     <main className="min-h-screen bg-[#F8F5F0] text-black">
@@ -994,14 +1015,22 @@ export default function CheckoutPage() {
                   disabled={payDisabled}
                   className="mt-5 h-14 w-full rounded-full bg-black text-sm font-semibold text-white shadow-lg transition hover:bg-neutral-900 disabled:opacity-50"
                 >
-                  {checkoutOptionsError
-                    ? "Checkout unavailable"
-                    : placingOrder
-                      ? "Processing Payment..."
-                      : quoteLoading
-                        ? "Calculating total..."
-                        : "Pay Online"}
+                  {!storeLive
+                    ? "Checkout paused — store getting ready"
+                    : checkoutOptionsError
+                      ? "Checkout unavailable"
+                      : placingOrder
+                        ? "Processing Payment..."
+                        : quoteLoading
+                          ? "Calculating total..."
+                          : "Pay Online"}
                 </button>
+                {!storeLive && (
+                  <p role="status" className="mt-4 rounded-[1.25rem] bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+                    Our online store is still getting ready, so checkout is paused for now.
+                    Your bag is saved — please check back soon to complete your order.
+                  </p>
+                )}
               </aside>
             </div>
           )}

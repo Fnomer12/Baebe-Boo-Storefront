@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ReceiptText } from "lucide-react";
+import { Printer, ReceiptText } from "lucide-react";
 import {
   AdminDataTable,
   AdminEmptyState,
@@ -24,7 +24,7 @@ type CounterSaleSummary = {
 
 type CounterSaleReceipt = CounterSaleSummary & {
   customerPhone: string;
-  lines: { id: string; productName: string; quantity: number; price: number; lineTotal: number }[];
+  lines: { id: string; productName: string; variantLabel?: string; quantity: number; price: number; lineTotal: number }[];
 };
 
 type SalesDigest = {
@@ -249,7 +249,12 @@ export default function CounterSalesWorkspace() {
               {receipt.lines.map((line) => (
                 <li key={line.id} className="flex items-baseline justify-between gap-3 py-2 text-sm">
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold">{line.productName}</span>
+                    <span className="block truncate font-semibold">
+                      {line.productName}
+                      {line.variantLabel ? (
+                        <span className="font-normal text-[var(--color-ink-soft)]"> · {line.variantLabel}</span>
+                      ) : null}
+                    </span>
                     <span className="text-xs text-[var(--color-ink-soft)]">
                       {line.quantity} × {formatCedis(line.price)}
                     </span>
@@ -265,6 +270,19 @@ export default function CounterSalesWorkspace() {
               </span>
               <strong className="text-2xl">{formatCedis(receipt.total)}</strong>
             </div>
+
+            <a
+              href={`/api/counter/sales/${receipt.id}/receipt/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="admin-button flex min-h-12 w-full items-center justify-center gap-2"
+            >
+              <Printer size={18} /> Print receipt (80 mm roll)
+            </a>
+            <p className="text-xs leading-5 text-[var(--color-ink-soft)]">
+              Prints a 72 mm receipt for the thermal printer in receipt mode. Use actual size,
+              never fit-to-page.
+            </p>
           </div>
         )}
       </AdminModal>

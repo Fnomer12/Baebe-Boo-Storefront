@@ -7,6 +7,7 @@ import {
 } from "@/lib/checkout/resolve-basket";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireServerEnv } from "@/lib/server-env";
+import { STORE_NOT_READY_MESSAGE, isStoreReady } from "@/lib/store-readiness";
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
 import { tryCreateServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -89,6 +90,14 @@ export async function POST(req: Request) {
       return errorResponse("Checkout is temporarily unavailable.", 503);
     }
 
+    // Real enforcement for the "Store live" switch: the checkout page disables
+    // its Pay button, but that is cosmetic — this is what actually refuses
+    // money while the shop is getting ready. Checked before anything is
+    // written, so no junk order or reservation is left behind.
+    if (!(await isStoreReady())) {
+      return errorResponse(STORE_NOT_READY_MESSAGE, 503);
+    }
+
     // Checked before anything is written. `requireServerEnv` throws, and it is
     // only reached after the order row exists and stock is reserved — so an
     // unconfigured key produced a junk payment_failed order on every attempt
@@ -111,10 +120,15 @@ export async function POST(req: Request) {
     const promotionQuote = await quoteCheckoutPromotions({
       lines: selectedVariants.map((variant) => ({
         variantId: variant.id,
+        productId: variant.productId,
+        category: variant.productCategory,
         unitPrice: variant.price,
         quantity: variant.quantity,
       })),
       productIds,
+      productCategories: Object.fromEntries(
+        selectedVariants.map((variant) => [variant.productId, variant.productCategory]),
+      ),
       deliveryFee,
       promotionCode: typeof promotionCode === "string" ? promotionCode : null,
       voucherCode: typeof voucherCode === "string" ? voucherCode : null,
@@ -185,11 +199,12 @@ export async function POST(req: Request) {
     if (itemError || !insertedItems) throw new Error("Could not prepare order items.");
 
     if (promotionQuote.appliedPromotions.length > 0) {
-      const rawDiscounts = promotionQuote.appliedPromotions.map((promotion) =>
-        promotion.kind === "percentage"
-          ? merchandiseTotal * (promotion.value / 100)
-          : promotion.value,
-      );
+      const rawDiscounts = promotionQuote.appliedPromotions.map((promotion) => {
+        const base = promotion.eligibleSubtotal ?? merchandiseTotal;
+        return promotion.kind === "percentage"
+          ? base * (promotion.value / 100)
+          : Math.min(base, promotion.value);
+      });
       let remainingDiscount = promotionQuote.discount;
       const { error: appliedPromotionError } = await supabaseAdmin
         .from("applied_promotions")
@@ -209,6 +224,7 @@ export async function POST(req: Request) {
                 value: promotion.value,
                 stackable: promotion.stackable,
                 promotion_code_id: promotion.codeId,
+                eligible_subtotal: promotion.eligibleSubtotal ?? null,
               },
               discount_amount: discountAmount,
             };

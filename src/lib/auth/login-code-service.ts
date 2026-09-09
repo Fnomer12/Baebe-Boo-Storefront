@@ -96,7 +96,11 @@ export async function requestLoginCode(email: string, requestIp: string | null):
   };
 }
 
-export async function verifyLoginCode(requestId: string, code: string): Promise<VerifyLoginCodeResult> {
+export async function verifyLoginCode(
+  requestId: string,
+  code: string,
+  supabaseOverride?: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+): Promise<VerifyLoginCodeResult> {
   if (!isSupabaseAdminConfigured) return { status: "unavailable" };
 
   const { data, error } = await supabaseAdmin.rpc("consume_login_code", {
@@ -124,7 +128,7 @@ export async function verifyLoginCode(requestId: string, code: string): Promise<
   const tokenHash = await mintTokenHash(email);
   if (!tokenHash) return { status: "unavailable" };
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = supabaseOverride ?? (await createServerSupabaseClient());
   const { data: session, error: verifyError } = await supabase.auth.verifyOtp({
     type: "magiclink",
     token_hash: tokenHash,

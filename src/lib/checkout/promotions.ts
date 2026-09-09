@@ -9,6 +9,7 @@ import {
   type PromotionCampaign,
   type PromotionKind,
 } from "@/domain/commerce/promotion-eligibility";
+import { matchPromotionTargeting } from "@/domain/commerce/promotion-targeting";
 import { resolveVoucherRedemption } from "@/domain/commerce/voucher-redemption";
 import { quoteOrder, type PricedLine } from "@/domain/commerce/pricing";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -26,6 +27,9 @@ type PromotionRow = {
   per_customer_limit: number | null;
   stackable: boolean;
   automatic: boolean;
+  /** Absent until the channel migration lands; treated as online-only. */
+  available_online?: boolean | null;
+  available_at_counter?: boolean | null;
 };
 
 type CodeRow = {
@@ -44,6 +48,8 @@ export type AppliedPromotion = {
   kind: PromotionKind;
   value: number;
   stackable: boolean;
+  /** Matching-lines subtotal; absent means the whole basket. */
+  eligibleSubtotal?: number;
 };
 
 export type CheckoutPromotionQuote = ReturnType<typeof quoteOrder> & {
@@ -57,7 +63,62 @@ export type CheckoutPromotionQuote = ReturnType<typeof quoteOrder> & {
 };
 
 const promotionColumns =
+  "id,name,promotion_type,value,status,starts_at,ends_at,minimum_order_amount,usage_limit,per_customer_limit,stackable,automatic,available_online,available_at_counter";
+
+const legacyPromotionColumns =
   "id,name,promotion_type,value,status,starts_at,ends_at,minimum_order_amount,usage_limit,per_customer_limit,stackable,automatic";
+
+async function fetchPromotionsByIds(ids: string[]) {
+  if (ids.length === 0) return [];
+  // Single-id path (coupon lookup) uses eq+maybeSingle so test doubles and
+  // PostgREST caches treat it as one row, not a list.
+  if (ids.length === 1) {
+    const attempt = await supabaseAdmin
+      .from("promotions")
+      .select(promotionColumns)
+      .eq("id", ids[0])
+      .maybeSingle();
+    if (!attempt.error) return attempt.data ? [(attempt.data as PromotionRow)] : [];
+    const legacy = await supabaseAdmin
+      .from("promotions")
+      .select(legacyPromotionColumns)
+      .eq("id", ids[0])
+      .maybeSingle();
+    if (legacy.error) throw new Error("Could not validate this promotion code.");
+    const row = legacy.data as PromotionRow | null;
+    return row ? [{ ...row, available_online: true, available_at_counter: false }] : [];
+  }
+  const attempt = await supabaseAdmin.from("promotions").select(promotionColumns).in("id", ids);
+  if (!attempt.error) return (attempt.data || []) as PromotionRow[];
+  // Channel columns missing (migration unapplied): fall back to legacy shape.
+  const legacy = await supabaseAdmin.from("promotions").select(legacyPromotionColumns).in("id", ids);
+  if (legacy.error) throw new Error("Could not validate active promotions.");
+  return ((legacy.data || []) as PromotionRow[]).map((row) => ({
+    ...row,
+    available_online: true,
+    available_at_counter: false,
+  }));
+}
+
+async function fetchAutomaticPromotions() {
+  const attempt = await supabaseAdmin
+    .from("promotions")
+    .select(promotionColumns)
+    .eq("status", "active")
+    .eq("automatic", true);
+  if (!attempt.error) return (attempt.data || []) as PromotionRow[];
+  const legacy = await supabaseAdmin
+    .from("promotions")
+    .select(legacyPromotionColumns)
+    .eq("status", "active")
+    .eq("automatic", true);
+  if (legacy.error) throw new Error("Could not validate active promotions.");
+  return ((legacy.data || []) as PromotionRow[]).map((row) => ({
+    ...row,
+    available_online: true,
+    available_at_counter: false,
+  }));
+}
 
 function toCampaign(row: PromotionRow, usageCount: number): PromotionCampaign | null {
   // `fixed_price` and `bundle` still have no implementation, and the admin can
@@ -91,25 +152,37 @@ function toCampaign(row: PromotionRow, usageCount: number): PromotionCampaign | 
 export async function quoteCheckoutPromotions(input: {
   lines: PricedLine[];
   productIds: string[];
+  /** Parallel to productIds, or per-line via `lines[].category`. */
+  productCategories?: Record<string, string | null>;
   deliveryFee: number;
   promotionCode?: string | null;
   voucherCode?: string | null;
   customerUserId?: string | null;
+  /** Till path: only promos flagged for the counter. Online path: online-flagged. */
+  channel?: "online" | "counter";
 }): Promise<CheckoutPromotionQuote> {
-  const subtotal = input.lines.reduce(
-    (sum, line) => sum + Math.max(0, line.unitPrice) * Math.max(0, line.quantity),
-    0,
-  );
+  const channel = input.channel || "online";
+  const categoryByProduct = new Map<string, string | null>();
+  for (const line of input.lines) {
+    if (line.productId && line.category !== undefined && !categoryByProduct.has(line.productId)) {
+      categoryByProduct.set(line.productId, line.category);
+    }
+  }
+  for (const [productId, category] of Object.entries(input.productCategories || {})) {
+    if (!categoryByProduct.has(productId)) categoryByProduct.set(productId, category);
+  }
+  const targetedLines = input.lines.map((line, index) => ({
+    productId: line.productId || input.productIds[index] || input.productIds[0] || "",
+    category: (line.productId ? categoryByProduct.get(line.productId) : null) ?? line.category ?? null,
+    unitPrice: line.unitPrice,
+    quantity: line.quantity,
+  }));
+  // Backfill product ids for callers that only sent lines.
   const requestedCode = input.promotionCode?.trim().toUpperCase() || null;
   const normalizedCode = requestedCode && requestedCode.length <= 64 ? requestedCode : null;
   const requestedVoucherCode = input.voucherCode?.trim() || null;
   const normalizedVoucherCode = requestedVoucherCode && requestedVoucherCode.length <= 64 ? requestedVoucherCode : null;
-  const { data: automaticData, error: automaticError } = await supabaseAdmin
-    .from("promotions")
-    .select(promotionColumns)
-    .eq("status", "active")
-    .eq("automatic", true);
-  if (automaticError) throw new Error("Could not validate active promotions.");
+  const automaticData = await fetchAutomaticPromotions();
 
   let codeRow: CodeRow | null = null;
   let couponRow: PromotionRow | null = null;
@@ -128,30 +201,42 @@ export async function quoteCheckoutPromotions(input: {
       invalidCodeReason = "That promotion code is not valid.";
       codeRow = null;
     } else {
-      const { data: promotionData, error: promotionError } = await supabaseAdmin
-        .from("promotions")
-        .select(promotionColumns)
-        .eq("id", codeRow.promotion_id)
-        .maybeSingle();
-      if (promotionError) throw new Error("Could not validate this promotion code.");
-      couponRow = promotionData as PromotionRow | null;
+      const promotionData = await fetchPromotionsByIds([codeRow.promotion_id]);
+      couponRow = (promotionData[0] as PromotionRow | undefined) || null;
       if (!couponRow) invalidCodeReason = "That promotion code is not valid.";
     }
   }
 
-  const rows = [...((automaticData || []) as PromotionRow[]), ...(couponRow ? [couponRow] : [])];
+  const channelAllowed = (row: PromotionRow) =>
+    channel === "counter" ? row.available_at_counter !== false && row.available_at_counter === true : row.available_online !== false;
+  const onlineAutomatic = ((automaticData || []) as PromotionRow[]).filter(channelAllowed);
+  if (couponRow && !channelAllowed(couponRow)) {
+    invalidCodeReason = "That promotion code is not valid for this checkout.";
+    couponRow = null;
+  }
+  // The till is automatic-only: it has no code box, so a typed code can never
+  // apply there even if one is somehow supplied.
+  if (channel === "counter") {
+    couponRow = null;
+  }
+
+  const rows = [...onlineAutomatic, ...(couponRow ? [couponRow] : [])];
   const promotionIds = [...new Set(rows.map((row) => row.id))];
-  const [redemptionResult, productRuleResult] = promotionIds.length
+  const [redemptionResult, productRuleResult, categoryRuleResult] = promotionIds.length
     ? await Promise.all([
         supabaseAdmin.from("promotion_redemptions").select("promotion_id,user_id").in("promotion_id", promotionIds),
         supabaseAdmin.from("promotion_products").select("promotion_id,product_id,is_excluded").in("promotion_id", promotionIds),
+        supabaseAdmin.from("promotion_categories").select("promotion_id,category,is_excluded").in("promotion_id", promotionIds),
       ])
-    : [{ data: [], error: null }, { data: [], error: null }];
+    : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
   if (redemptionResult.error || productRuleResult.error) {
     throw new Error("Could not validate active promotions.");
   }
+  // A missing `promotion_categories` table (migration unapplied) means no
+  // category rules, not a failed checkout.
   const redemptionData = redemptionResult.data;
   const productRuleData = productRuleResult.data;
+  const categoryRuleData = categoryRuleResult.error ? [] : categoryRuleResult.data;
 
   const usageByPromotion = new Map<string, number>();
   const customerUsageByPromotion = new Map<string, number>();
@@ -170,32 +255,49 @@ export async function quoteCheckoutPromotions(input: {
     product_id: string;
     is_excluded: boolean;
   }>;
+  const categoryRules = (categoryRuleData || []) as Array<{
+    promotion_id: string;
+    category: string;
+    is_excluded: boolean;
+  }>;
 
   const eligible = (row: PromotionRow, codeUsageCount = 0) => {
     const campaign = toCampaign(row, Math.max(usageByPromotion.get(row.id) || 0, codeUsageCount));
     if (!campaign) {
-      return { promotion: null, reason: "This promotion type is not available online." };
+      return { promotion: null, reason: "This promotion type is not available online.", eligibleSubtotal: 0 };
     }
     const rules = productRules.filter((rule) => rule.promotion_id === row.id);
-    const excludedIds = new Set(rules.filter((rule) => rule.is_excluded).map((rule) => rule.product_id));
-    const includedIds = new Set(rules.filter((rule) => !rule.is_excluded).map((rule) => rule.product_id));
-    if (input.productIds.some((id) => excludedIds.has(id))) {
-      return { promotion: null, reason: "This promotion does not apply to every item in your cart." };
-    }
-    if (includedIds.size > 0 && input.productIds.some((id) => !includedIds.has(id))) {
-      return { promotion: null, reason: "This promotion does not apply to every item in your cart." };
+    const catRules = categoryRules.filter((rule) => rule.promotion_id === row.id);
+    const { eligibleLines, eligibleSubtotal } = matchPromotionTargeting(targetedLines, {
+      includedProductIds: rules.filter((rule) => !rule.is_excluded).map((rule) => rule.product_id),
+      excludedProductIds: rules.filter((rule) => rule.is_excluded).map((rule) => rule.product_id),
+      includedCategories: catRules.filter((rule) => !rule.is_excluded).map((rule) => rule.category),
+      excludedCategories: catRules.filter((rule) => rule.is_excluded).map((rule) => rule.category),
+    });
+    if (eligibleLines.length === 0) {
+      return {
+        promotion: null,
+        reason: "This promotion does not apply to any item in your cart.",
+        eligibleSubtotal: 0,
+      };
     }
     const result = evaluatePromotionEligibility(campaign, {
-      subtotal,
+      subtotal: eligibleSubtotal,
       now: new Date(),
       customerUsageCount: customerUsageByPromotion.get(row.id) || 0,
     });
-    return result.eligible
-      ? { promotion: result.promotion, reason: null }
-      : { promotion: null, reason: result.reason };
+    if (!result.eligible) return { promotion: null, reason: result.reason, eligibleSubtotal };
+    // Free delivery is order-level: once any line matches, the fee decision is
+    // settled by `resolvePromotionStack` below. Discounts are pro-rated to the
+    // matching lines via `eligibleSubtotal`.
+    const promotion =
+      result.promotion.kind === "free_shipping"
+        ? result.promotion
+        : { ...result.promotion, eligibleSubtotal };
+    return { promotion, reason: null, eligibleSubtotal };
   };
 
-  const eligibleAutomatic = ((automaticData || []) as PromotionRow[])
+  const eligibleAutomatic = onlineAutomatic
     .map((row) => eligible(row).promotion)
     .filter((promotion): promotion is EligiblePromotion => Boolean(promotion));
   const couponResult = couponRow ? eligible(couponRow, codeRow?.usage_count || 0) : null;
@@ -275,6 +377,10 @@ export async function quoteCheckoutPromotions(input: {
   });
 
   const rowById = new Map(rows.map((row) => [row.id, row]));
+  const eligibleById = new Map<string, number | undefined>([
+    ...discountAutomatic.map((promotion) => [promotion.id, promotion.eligibleSubtotal] as const),
+    ...(discountCoupon ? [[discountCoupon.id, discountCoupon.eligibleSubtotal] as const] : []),
+  ]);
   // Free delivery goes last on purpose: the caller that writes
   // `applied_promotions` hands the remaining discount to the final entry, and
   // a free-delivery row has no merchandise discount to claim.
@@ -298,6 +404,7 @@ export async function quoteCheckoutPromotions(input: {
         // the row would otherwise be snapshotted as if it were money off.
         value: promotion.kind === "free_shipping" ? 0 : promotion.value,
         stackable: promotion.stackable,
+        eligibleSubtotal: eligibleById.get(promotionId),
       },
     ];
   });
@@ -328,7 +435,7 @@ function buildPromotionMessage(input: {
   invalidCodeReason: string | null;
   couponApplied: boolean;
   couponRow: PromotionRow | null;
-  couponResult: { promotion: EligiblePromotion; reason: null } | { promotion: null; reason: string } | null;
+  couponResult: { promotion: EligiblePromotion | null; reason: string | null } | null;
 }): string | null {
   if (!input.requestedCode) return null;
   if (input.invalidCodeReason) return input.invalidCodeReason;

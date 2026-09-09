@@ -2,6 +2,7 @@ import Link from "next/link";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import StoreReadinessBanner from "@/components/storefront/StoreReadinessBanner";
 import { whatsappUrl } from "@/lib/public-contact";
 
 export { whatsappUrl } from "@/lib/public-contact";
@@ -9,6 +10,7 @@ export { whatsappUrl } from "@/lib/public-contact";
 export function StorefrontPage({ children, cartCount = 0 }: { children: React.ReactNode; cartCount?: number }) {
   return (
     <main className="flex min-h-screen flex-col bg-[var(--color-cream)] text-[var(--color-ink)]">
+      <StoreReadinessBanner />
       <Navbar cartCount={cartCount} />
       {/* Grows so the footer sits at the bottom on short pages instead of leaving dead space beneath it. */}
       <div className="flex-1">{children}</div>

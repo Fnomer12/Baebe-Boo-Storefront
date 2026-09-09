@@ -96,7 +96,7 @@ function mockCatalogue(input: {
         },
       });
     }
-    if (table === "promotion_redemptions" || table === "promotion_products") {
+    if (table === "promotion_redemptions" || table === "promotion_products" || table === "promotion_categories") {
       return builder({ list: EMPTY });
     }
     throw new Error(`Unexpected table: ${table}`);
