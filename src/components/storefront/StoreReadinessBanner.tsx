@@ -36,10 +36,21 @@ export default function StoreReadinessBanner() {
   return (
     <div
       role="status"
-      className="bg-amber-400 px-4 py-3 text-center text-sm font-semibold text-amber-950"
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-0 top-[5.25rem] z-40 px-3 sm:top-[5.75rem] sm:px-4 md:top-[6.5rem] md:px-6"
     >
-      Our online store is still getting ready — browsing is open, but products are
-      not available for purchase just yet. Check back soon.
+      <div className="pointer-events-auto mx-auto flex max-w-3xl items-start gap-3 rounded-2xl border border-amber-200/90 bg-amber-50/95 px-4 py-3 text-left text-sm text-amber-950 shadow-lg shadow-amber-950/10 backdrop-blur-md sm:items-center sm:rounded-full sm:px-5 sm:py-3">
+        <span
+          aria-hidden="true"
+          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-200 text-xs font-bold sm:mt-0"
+        >
+          !
+        </span>
+        <p className="min-w-0 flex-1 leading-5">
+          Our online store is still getting ready — browsing is open, but products are
+          not available for purchase just yet. Check back soon.
+        </p>
+      </div>
     </div>
   );
 }
