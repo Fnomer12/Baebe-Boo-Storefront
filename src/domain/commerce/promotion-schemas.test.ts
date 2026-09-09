@@ -46,8 +46,8 @@ describe("promotionCreateSchema", () => {
   it("accepts the wall-clock value a datetime-local input actually produces", () => {
     const result = promotionCreateSchema.safeParse({
       ...validPromotion,
-      startsAt: "2026-08-06T14:30",
-      endsAt: "2026-09-06T14:30",
+      startsAt: "2099-08-06T14:30",
+      endsAt: "2099-09-06T14:30",
     });
     expect(result.success).toBe(true);
     if (result.success) {
