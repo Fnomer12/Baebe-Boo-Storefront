@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ShoppingBag } from "lucide-react";
 import {
   AdminEmptyState,
@@ -30,6 +30,8 @@ import {
   paginate,
 } from "@/domain/counter/catalog-filter";
 import { applySoldQuantities } from "@/domain/counter/stock";
+import { availableStock } from "@/domain/counter/stock";
+import { extractCounterScanSku } from "@/domain/counter/scan";
 import {
   groupCatalogByProduct,
   soleSellableVariant,
@@ -39,6 +41,7 @@ import { formatCedis } from "@/domain/counter/money";
 import CounterCartPanel from "./CounterCartPanel";
 import CounterProductCard from "./CounterProductCard";
 import CounterVariantPicker from "./CounterVariantPicker";
+import CounterReceiptPrintModal, { type CounterReceiptForPrint } from "./CounterReceiptPrintModal";
 import { AdminHint } from "@/components/admin/AdminHint";
 
 const PAGE_SIZE = 12;
@@ -48,6 +51,8 @@ export default function SellWorkspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [scanError, setScanError] = useState("");
+  const scanInputRef = useRef<HTMLInputElement>(null);
 
   const [lines, setLines] = useState<CounterCartLine[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -57,6 +62,7 @@ export default function SellWorkspace() {
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [saleError, setSaleError] = useState("");
+  const [completedCashReceipt, setCompletedCashReceipt] = useState<CounterReceiptForPrint | null>(null);
   /**
    * One key per cart. It survives re-renders and failed attempts, so a retry
    * after a dropped response replays the same sale rather than ringing up a
@@ -65,6 +71,7 @@ export default function SellWorkspace() {
   const [saleKey, setSaleKey] = useState(newSaleKey);
 
   const [query, setQuery] = useState("");
+  const [scanValue, setScanValue] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const [ageRange, setAgeRange] = useState(ALL_AGE_RANGES);
   const [page, setPage] = useState(1);
@@ -154,6 +161,36 @@ export default function SellWorkspace() {
     [itemsByVariantId],
   );
 
+  const handleScan = useCallback(
+    (value: string) => {
+      const sku = extractCounterScanSku(value);
+      if (!sku) return;
+
+      const matches = items.filter(
+        (item) =>
+          item.variantId &&
+          item.sku.trim().toLowerCase() === sku.toLowerCase() &&
+          availableStock(item) > 0,
+      );
+      if (matches.length !== 1) {
+        setScanError(
+          matches.length === 0
+            ? `No in-stock product was found for “${sku}”.`
+            : `More than one stocked product uses SKU “${sku}”. Ask an admin to fix the duplicate.`,
+        );
+        return;
+      }
+
+      const item = matches[0];
+      addVariant(item.variantId as string);
+      setScanError("");
+      setScanValue("");
+      setNotice(`Added ${item.name}${item.variantTitle ? ` · ${item.variantTitle}` : ""}.`);
+      requestAnimationFrame(() => scanInputRef.current?.focus());
+    },
+    [addVariant, items],
+  );
+
   const totals = cartTotals(lines);
 
   const completeSale = async () => {
@@ -178,9 +215,15 @@ export default function SellWorkspace() {
       }
 
       setItems((current) => applySoldQuantities(current, soldQuantitiesByVariant(lines)));
-      setNotice(
-        `Sale ${payload?.sale?.orderNumber || ""} completed · ${formatCedis(totals.total)}`.trim(),
-      );
+      const sale = payload?.sale as CounterReceiptForPrint;
+      if (paymentMethod === "cash" && sale?.id) {
+        setCompletedCashReceipt(sale);
+        setNotice("");
+      } else {
+        setNotice(
+          `Sale ${sale?.orderNumber || ""} completed · ${formatCedis(totals.total)}`.trim(),
+        );
+      }
       setLines([]);
       setCustomerName("");
       setCustomerPhone("");
@@ -239,6 +282,38 @@ export default function SellWorkspace() {
           {notice}
         </p>
       )}
+
+      <section className="rounded-3xl border border-black/[0.07] bg-white p-4 shadow-sm">
+        <label htmlFor="counter-product-scan" className="block text-sm font-bold">
+          Scan product sticker
+        </label>
+        <p className="mt-1 text-xs text-[var(--color-ink-soft)]">
+          Scan the barcode or QR code and press Enter. The matching in-stock version is added automatically.
+        </p>
+        <input
+          ref={scanInputRef}
+          id="counter-product-scan"
+          value={scanValue}
+          onChange={(event) => {
+            setScanValue(event.target.value);
+            setScanError("");
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            handleScan(scanValue);
+          }}
+          className="admin-input mt-3"
+          placeholder="Scan SKU barcode or QR code…"
+          autoComplete="off"
+          inputMode="text"
+        />
+        {scanError && (
+          <p role="alert" className="mt-2 text-sm font-semibold text-red-700">
+            {scanError}
+          </p>
+        )}
+      </section>
 
       <AdminFilterBar
         query={query}
@@ -389,6 +464,13 @@ export default function SellWorkspace() {
           if (displayName) setCustomerName(displayName);
         }}
         onComplete={() => void completeSale()}
+      />
+
+      <CounterReceiptPrintModal
+        key={completedCashReceipt?.id || "counter-receipt"}
+        open={Boolean(completedCashReceipt)}
+        receipt={completedCashReceipt}
+        onClose={() => setCompletedCashReceipt(null)}
       />
     </div>
   );

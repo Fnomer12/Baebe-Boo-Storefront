@@ -11,6 +11,7 @@ import {
   type AdminTableColumn,
 } from "@/components/admin/AdminWorkspacePrimitives";
 import { formatCedis } from "@/domain/counter/money";
+import CounterPrinterSetup from "./CounterPrinterSetup";
 
 type CounterSaleSummary = {
   id: string;
@@ -60,6 +61,9 @@ export default function CounterSalesWorkspace() {
   const [receipt, setReceipt] = useState<CounterSaleReceipt | null>(null);
   const [receiptLoadingId, setReceiptLoadingId] = useState<string | null>(null);
   const [receiptError, setReceiptError] = useState("");
+  const [printingReceiptId, setPrintingReceiptId] = useState<string | null>(null);
+  const [receiptNotice, setReceiptNotice] = useState("");
+  const [printerSetupOpen, setPrinterSetupOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +95,8 @@ export default function CounterSalesWorkspace() {
   const openReceipt = async (saleId: string) => {
     setReceiptLoadingId(saleId);
     setReceiptError("");
+    setReceiptNotice("");
+    setPrinterSetupOpen(false);
     try {
       const response = await fetch(`/api/counter/sales/${saleId}`);
       const payload = await response.json().catch(() => null);
@@ -102,6 +108,27 @@ export default function CounterSalesWorkspace() {
       );
     } finally {
       setReceiptLoadingId(null);
+    }
+  };
+
+  const printReceipt = async (saleId: string) => {
+    setPrintingReceiptId(saleId);
+    setReceiptError("");
+    setReceiptNotice("");
+    try {
+      const response = await fetch(`/api/counter/sales/${saleId}/receipt/print`, {
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (response.status === 428 || response.status === 409) setPrinterSetupOpen(true);
+        throw new Error(payload?.message || "The receipt could not be printed.");
+      }
+      setReceiptNotice(`Receipt sent to ${payload?.printer || "the counter printer"} (${payload?.jobId || "job submitted"}).`);
+    } catch (printError) {
+      setReceiptError(printError instanceof Error ? printError.message : "The receipt could not be printed.");
+    } finally {
+      setPrintingReceiptId(null);
     }
   };
 
@@ -231,7 +258,10 @@ export default function CounterSalesWorkspace() {
 
       <AdminModal
         open={Boolean(receipt)}
-        onClose={() => setReceipt(null)}
+        onClose={() => {
+          setReceipt(null);
+          setPrinterSetupOpen(false);
+        }}
         subtitle="Receipt"
         title={receipt?.orderNumber || "Sale"}
       >
@@ -271,17 +301,43 @@ export default function CounterSalesWorkspace() {
               <strong className="text-2xl">{formatCedis(receipt.total)}</strong>
             </div>
 
+            {receiptNotice && (
+              <p role="status" className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">
+                {receiptNotice}
+              </p>
+            )}
+            {receiptError && (
+              <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-900">
+                {receiptError}
+              </p>
+            )}
+            <CounterPrinterSetup
+              open={printerSetupOpen}
+              onVerified={() => {
+                setPrinterSetupOpen(false);
+                setReceiptError("");
+                setReceiptNotice("Printer verified. Press print again to send this receipt.");
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => void printReceipt(receipt.id)}
+              disabled={printingReceiptId === receipt.id}
+              className="admin-button flex min-h-12 w-full items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Printer size={18} /> {printingReceiptId === receipt.id ? "Sending receipt…" : "Print receipt on counter printer"}
+            </button>
             <a
               href={`/api/counter/sales/${receipt.id}/receipt/pdf`}
               target="_blank"
               rel="noopener noreferrer"
-              className="admin-button flex min-h-12 w-full items-center justify-center gap-2"
+              className="block text-center text-xs font-semibold text-[var(--color-brand-deep)] underline underline-offset-4"
             >
-              <Printer size={18} /> Print receipt (80 mm roll)
+              Download PDF copy
             </a>
             <p className="text-xs leading-5 text-[var(--color-ink-soft)]">
-              Prints a 72 mm receipt for the thermal printer in receipt mode. Use actual size,
-              never fit-to-page.
+              Sends a native 80 mm receipt job with a 160 mm minimum height and QR code directly to the verified host queue. The PDF copy
+              is only for download or troubleshooting.
             </p>
           </div>
         )}

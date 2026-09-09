@@ -1,15 +1,21 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authorizeMock, fromMock } = vi.hoisted(() => ({
+const { authorizeMock, fromMock, printMock } = vi.hoisted(() => ({
   authorizeMock: vi.fn(),
   fromMock: vi.fn(),
+  printMock: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ authorizeAdminApi: authorizeMock }));
 vi.mock("@/lib/supabase-admin", () => ({
   isSupabaseAdminConfigured: true,
   supabaseAdmin: { from: fromMock },
+}));
+vi.mock("@/lib/labels/native-print", () => ({
+  buildNativeCalibrationJob: vi.fn(() => Buffer.from("calibration")),
+  buildNativeLabelJob: vi.fn(() => Buffer.from("labels")),
+  printNativeJob: printMock,
 }));
 
 import { POST } from "./route";
@@ -49,6 +55,7 @@ describe("admin labels route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authorizeMock.mockResolvedValue({ authorized: true });
+    printMock.mockResolvedValue({ printer: "XPrinter-XP-365B", jobId: "XPrinter-XP-365B-1" });
     mockCatalogue();
   });
 
@@ -77,6 +84,22 @@ describe("admin labels route", () => {
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
     const bytes = Buffer.from(await response.arrayBuffer());
     expect(bytes.subarray(0, 4).toString()).toBe("%PDF");
+  });
+
+  it("sends the calibration page to the native printer when requested", async () => {
+    const response = await POST(
+      new Request("https://example.com/api/admin/labels", {
+        method: "POST",
+        body: JSON.stringify({ calibration: true, print: true }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      printed: true,
+      printer: "XPrinter-XP-365B",
+    });
+    expect(printMock).toHaveBeenCalledWith(expect.any(Buffer), "Baebe Boo label calibration");
   });
 
   it("renders one sticker per copy requested", async () => {

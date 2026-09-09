@@ -40,7 +40,6 @@ import {
   AdminFilterBar,
 } from "@/components/admin/AdminWorkspacePrimitives";
 import ProductWizardModal, { type WizardMode } from "@/components/admin/products/ProductWizardModal";
-import LabelPrintModal from "@/components/admin/products/LabelPrintModal";
 
 type ApiRecord = Record<string, unknown>;
 type ProductResponse = {
@@ -163,7 +162,6 @@ export default function ProductManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editor, setEditor] = useState<{ mode: WizardMode; productId: string | null } | null>(null);
-  const [showLabels, setShowLabels] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -252,7 +250,7 @@ export default function ProductManagement() {
           <div className="ml-auto flex w-fit flex-wrap justify-end gap-2">
             <button
               type="button"
-              onClick={() => setShowLabels(true)}
+              onClick={() => router.push("/BaebeAdmin/products/labels")}
               className="flex min-h-11 items-center gap-2 rounded-2xl border border-black/[0.07] bg-white px-4 py-3 text-sm font-semibold text-black/70 shadow-sm transition hover:bg-black/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28637d] focus-visible:ring-offset-2"
             >
               <Printer size={16} />
@@ -372,7 +370,6 @@ export default function ProductManagement() {
           onSaved={load}
         />
       )}
-      {showLabels && <LabelPrintModal onClose={() => setShowLabels(false)} />}
     </div>
   );
 }
