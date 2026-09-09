@@ -6,11 +6,8 @@ import { counterOrderIdSchema } from "@/lib/counter/counter-schemas";
 import { getCounterSaleReceipt } from "@/lib/counter/sales";
 import { counterReceiptUrl } from "@/lib/counter/receipt-link";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import {
-  buildNativeReceiptJob,
-  getNativePrinterStatus,
-  printNativeJob,
-} from "@/lib/labels/native-print";
+import { buildNativeReceiptJob } from "@/lib/labels/native-print";
+import { z } from "zod";
 
 const PAYMENT_LABEL: Record<string, string> = {
   cash: "Cash",
@@ -18,9 +15,14 @@ const PAYMENT_LABEL: Record<string, string> = {
   momo: "Mobile money",
 };
 
-/** Send a counter sale to the verified host printer without opening a PDF. */
+const requestSchema = z.object({
+  transport: z.literal("local"),
+  printer: z.string().trim().min(1).max(128),
+});
+
+/** Return a counter sale's native receipt payload to the workstation-local connector. */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const authorization = await authorizeCounterApi();
@@ -32,8 +34,13 @@ export async function POST(
     return NextResponse.json({ message: "Sale not found." }, { status: 404 });
   }
 
+  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ message: "Use the local printer connector to print this receipt." }, { status: 400 });
+  }
+
   const verifiedPrinter = (await cookies()).get("baebe_printer_verified")?.value?.trim();
-  if (!verifiedPrinter) {
+  if (!verifiedPrinter || verifiedPrinter !== parsed.data.printer) {
     return NextResponse.json(
       { message: "Connect the counter printer and complete its test page before printing receipts." },
       { status: 428 },
@@ -42,25 +49,13 @@ export async function POST(
 
   const { staff } = authorization.counter;
   try {
-    const printerStatus = await getNativePrinterStatus();
-    const printer = printerStatus.printers.find(
-      (candidate) => candidate.name === verifiedPrinter && candidate.connected,
-    );
-    if (!printer) {
-      return NextResponse.json(
-        { message: "The verified counter printer is no longer connected. Reconnect it and run the test again." },
-        { status: 409 },
-      );
-    }
-
     const sale = await getCounterSaleReceipt(staff.shop.id, staff.id, saleId.data);
     const { data: shop } = await supabaseAdmin
       .from("shops")
       .select("name, location")
       .eq("id", staff.shop.id)
       .maybeSingle();
-    const result = await printNativeJob(
-      buildNativeReceiptJob({
+    const job = buildNativeReceiptJob({
         shopName: (shop?.name as string) || staff.shop.name || "Baebe Boo",
         shopLocation: (shop?.location as string) || staff.shop.location || "",
         orderNumber: sale.orderNumber,
@@ -70,11 +65,14 @@ export async function POST(
         lines: sale.lines,
         total: sale.total,
         receiptUrl: counterReceiptUrl(sale.orderNumber),
-      }),
-      `Baebe Boo receipt ${sale.orderNumber}`,
-      printer.name,
-    );
-    return NextResponse.json({ printed: true, host: printerStatus.host, ...result });
+      });
+    return NextResponse.json({
+      printed: false,
+      transport: "local-bridge",
+      printer: parsed.data.printer,
+      title: `Baebe Boo receipt ${sale.orderNumber}`,
+      jobBase64: job.toString("base64"),
+    });
   } catch (error) {
     if (error instanceof CounterError) {
       return NextResponse.json({ message: error.message }, { status: error.status });
