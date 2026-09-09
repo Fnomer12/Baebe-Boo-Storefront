@@ -50,3 +50,6 @@ next-env.d.ts
 # local QA screenshots and agent tooling state
 /screenshots/
 /.caliber/
+
+# local secret key file (e.g. Supabase sbp_ key)
+.key
