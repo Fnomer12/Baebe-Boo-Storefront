@@ -138,7 +138,24 @@ async function phoneForEmail(email: string): Promise<string | null> {
       .limit(1)
       .maybeSingle(),
   ]);
-  return normalizeGhanaPhone(profile?.phone || member?.phone);
+  const direct = normalizeGhanaPhone(profile?.phone || member?.phone);
+  if (direct) return direct;
+
+  // Staff authorizations keep the mailbox-to-staff link; the staff contact is
+  // the fallback for the staff-portal notice when no customer profile exists.
+  const { data: authorization } = await supabaseAdmin
+    .from("staff_authorizations")
+    .select("staff_id")
+    .eq("email", email)
+    .limit(1)
+    .maybeSingle();
+  if (!authorization?.staff_id) return null;
+  const { data: staff } = await supabaseAdmin
+    .from("shop_staff")
+    .select("staff_contact")
+    .eq("id", authorization.staff_id)
+    .maybeSingle();
+  return normalizeGhanaPhone(staff?.staff_contact);
 }
 
 export async function verifyLoginCode(
