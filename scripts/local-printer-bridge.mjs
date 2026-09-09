@@ -169,6 +169,7 @@ function json(res, status, payload, origin) {
     "Access-Control-Allow-Origin": origin || "null",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Private-Network": "true",
     Vary: "Origin",
   });
   res.end(JSON.stringify(payload));
