@@ -43,11 +43,13 @@ describe("native counter receipt jobs", () => {
     }]).toString("ascii");
 
     expect(job).toContain("SIZE 50 mm,30 mm");
-    expect(job).toContain('QRCODE 12,28,L,3');
-    expect(job).toContain('TEXT 16,8,"0",0,1,1,"BAEBE BOO"');
-    expect(job).toContain('BAR 198,12,1,128');
-    expect(job).toContain('TEXT 210,8,"0",0,1,1,"SCAN QR"');
-    expect(job).toContain('GHS 189.00');
+    expect(job).toContain('QRCODE 12,32,L,3');
+    expect(job).toContain('TEXT 16,10,"0",0,1,1,"BAEBE BOO"');
+    expect(job).toContain('BAR 198,14,1,126');
+    expect(job).toContain('TEXT 210,10,"0",0,1,1,"SCAN QR"');
+    expect(job).toContain('TEXT 210,76,"0",0,1,1,"GHS"');
+    expect(job).toContain('TEXT 210,90,"0",0,2,2,"189.00"');
+    expect(job).not.toContain('GHS 189.00');
     expect(job).toContain('BARCODE 12,158,"128",36,0,0,2,2');
     expect(job).toContain("PRINT 1,1");
     expect(job).not.toContain('SIZE 30 mm,50 mm');
@@ -68,7 +70,8 @@ describe("native counter receipt jobs", () => {
     for (const match of job.matchAll(/^(?:TEXT|QRCODE|BARCODE|BAR|BOX) (\d+),(\d+)/gm)) {
       expect(Number(match[2])).toBeLessThan(240);
     }
-    expect(job).toContain("GHS 330.00");
+    expect(job).toContain('TEXT 210,91,"0",0,1,1,"GHS"');
+    expect(job).toContain('TEXT 210,105,"0",0,2,2,"330.00"');
   });
 
   it("shortens extremely long product names before the fixed price zone", async () => {
@@ -83,7 +86,8 @@ describe("native counter receipt jobs", () => {
     }]).toString("ascii");
 
     expect(job).toContain("...");
-    expect(job).toContain('TEXT 210,87,"0",0,2,2,"GHS 360.00"');
+    expect(job).toContain('TEXT 210,91,"0",0,1,1,"GHS"');
+    expect(job).toContain('TEXT 210,105,"0",0,2,2,"360.00"');
     expect(job).toContain('BARCODE 12,158,"128",36,0,0,2,2');
   });
 

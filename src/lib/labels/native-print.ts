@@ -19,6 +19,10 @@ function priceText(price: number): string {
   return `GHS ${price.toFixed(2)}`;
 }
 
+function priceAmount(price: number): string {
+  return price.toFixed(2);
+}
+
 function wrap(value: string, maxLength: number, maxLines = 2): string[] {
   const words = ascii(value, 120).split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -78,19 +82,22 @@ export function buildNativeLabelJob(labels: ShelfLabel[], sizeId: LabelSizeId = 
     // must be wrapped to a real dot-width budget rather than a generous-looking
     // character count. This prevents long names from clipping at the label edge.
     const rightX = 210;
+    const productY = 28;
     const productLines = wrap(label.productName, 15, 3);
     const variantLines = wrap(label.variantLabel, 15, 1);
     const skuLines = fixedLines(`SKU ${label.sku}`, 46, 1);
-    const variantY = 24 + productLines.length * 15 + 2;
-    const priceY = variantY + 16;
+    const variantY = productY + Math.max(2, productLines.length) * 15 + 3;
+    const priceLabelY = variantY + 15;
+    const priceAmountY = priceLabelY + 14;
     commands.push(
-      tsplText(16, 8, label.shopName.toUpperCase(), 32),
-      `QRCODE 12,28,L,3,A,0,"${ascii(label.url, 220)}"`,
-      `BAR 198,12,1,128`,
-      tsplText(rightX, 8, "SCAN QR", 10),
-      ...productLines.map((line, index) => tsplText(rightX, 24 + index * 15, line, 15)),
+      tsplText(16, 10, label.shopName.toUpperCase(), 32),
+      `QRCODE 12,32,L,3,A,0,"${ascii(label.url, 220)}"`,
+      `BAR 198,14,1,126`,
+      tsplText(rightX, 10, "SCAN QR", 10),
+      ...productLines.map((line, index) => tsplText(rightX, productY + index * 15, line, 15)),
       ...variantLines.map((line, index) => tsplText(rightX, variantY + index * 14, line, 15)),
-      tsplText(rightX, priceY, priceText(label.price), 12, 2),
+      tsplText(rightX, priceLabelY, "GHS", 4, 1),
+      tsplText(rightX, priceAmountY, priceAmount(label.price), 10, 2),
       `BARCODE 12,158,"128",36,0,0,2,2,"${ascii(label.sku, 40)}"`,
       ...skuLines.map((line, index) => tsplText(12, 208 + index * 14, line, 46)),
       "PRINT 1,1",
@@ -149,12 +156,13 @@ export function buildNativeCalibrationJob(sizeId: LabelSizeId = "50x30"): Buffer
     "REFERENCE 0,0",
     "CLS",
     `BOX 8,8,392,232,2`,
-    `QRCODE 12,28,L,3,A,0,"https://baebe-boo.jtechinnovations.tech/products/calibration-test?sku=TEST-SKU"`,
-    `BAR 198,12,1,128`,
-    tsplText(210, 8, "SCAN QR", 10),
-    tsplText(210, 24, "50 x 30 MM", 15),
-    tsplText(210, 40, "TEST LABEL", 15),
-    tsplText(210, 72, "GHS 123.45", 12, 2),
+    `QRCODE 12,32,L,3,A,0,"https://baebe-boo.jtechinnovations.tech/products/calibration-test?sku=TEST-SKU"`,
+    `BAR 198,14,1,126`,
+    tsplText(210, 10, "SCAN QR", 10),
+    tsplText(210, 28, "50 x 30 MM", 15),
+    tsplText(210, 43, "TEST LABEL", 15),
+    tsplText(210, 76, "GHS", 4),
+    tsplText(210, 90, "123.45", 10, 2),
     `BARCODE 12,158,"128",36,0,0,2,2,"TEST-SKU-123"`,
     tsplText(12, 208, "SKU TEST-SKU-123", 46),
     "PRINT 1,1",
