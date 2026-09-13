@@ -6,7 +6,7 @@ import {
 } from "./admin-workspace";
 
 describe("admin workspace routes", () => {
-  it("exposes the nine primary workspaces", () => {
+  it("exposes the primary workspaces", () => {
     expect(adminWorkspaceRoutes.map((route) => route.label)).toEqual([
       "Dashboard",
       "Products",
@@ -18,6 +18,7 @@ describe("admin workspace routes", () => {
       "Stores",
       "Delivery",
       "Parenting",
+      "Change password",
     ]);
   });
 
@@ -31,6 +32,7 @@ describe("admin workspace routes", () => {
     expect(adminWorkspaceTabFromPathname("/BaebeAdmin/customers")).toBe("customers");
     expect(adminWorkspaceTabFromPathname("/BaebeAdmin/stores")).toBe("stores");
     expect(adminWorkspaceTabFromPathname("/BaebeAdmin/parenting")).toBe("parenting");
+    expect(adminWorkspaceTabFromPathname("/BaebeAdmin/password")).toBe("password");
     expect(adminWorkspaceTabFromPathname("/BaebeAdmin/not-a-workspace")).toBe("dashboard");
   });
 
@@ -40,6 +42,7 @@ describe("admin workspace routes", () => {
     expect(isAdminWorkspaceTab("procurement")).toBe(true);
     expect(isAdminWorkspaceTab("finance")).toBe(true);
     expect(isAdminWorkspaceTab("promotions")).toBe(true);
+    expect(isAdminWorkspaceTab("password")).toBe(true);
     expect(isAdminWorkspaceTab("not-a-workspace")).toBe(false);
   });
 });

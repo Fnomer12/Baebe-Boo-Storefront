@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "/BaebeAdmin/products/labels": {
+      "targetKind": "existing-ui",
+      "projectId": "929fb46e-6a95-4198-bf6a-38ae21abefc9",
+      "baselineDraftId": "f0d9e8ec-bf62-4540-97ca-478d22369586",
+      "activeDraftId": "f0d9e8ec-bf62-4540-97ca-478d22369586",
+      "designSystemPath": ".superdesign/design-system.md",
+      "referenceIds": [],
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "src/components/admin/products/LabelPrintWorkspace.tsx",
+        "src/app/BaebeAdmin/(protected)/products/labels/page.tsx",
+        "src/components/admin/AdminWorkspaceShell.tsx",
+        "src/app/api/admin/products/route.ts",
+        "src/lib/admin/catalog.ts:320:385",
+        "src/app/globals.css:1:120",
+        "src/app/globals.css:506:570"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "c3b441a5ca18a4c5e708137f9cce6c84f2df8667d8eac99ae1390dc6a886cff6",
+        "src/components/admin/products/LabelPrintWorkspace.tsx": "95530dca2c3621c413070aed3282ec326b36699c483500b8779175cb122e9cdc",
+        "src/app/BaebeAdmin/(protected)/products/labels/page.tsx": "dbdc2719867554a76874fda14670c4d5302ffaf85a0ea8d24c92857aa1593cf7",
+        "src/components/admin/AdminWorkspaceShell.tsx": "23fce200e30dbd824d2bd19061c4036c3d4ac493427971c66f8f87f7d5adb50f",
+        "src/app/api/admin/products/route.ts": "5154291e0ce29acf78e84c669421194ebf7c009505a549c98544c420e8e5e0b9",
+        "src/lib/admin/catalog.ts": "6ff21d5f7211f2650934d14e1e791f509f93651e853c3a56bee193e05b92de48",
+        "src/app/globals.css": "01ac9e4763691b5f94ec1281360f090bfbb9be8233ee9f8986061184bc45b58b"
+      },
+      "components": [
+        {
+          "name": "AdminWorkspaceShell",
+          "id": "1186e777-17c3-428e-8159-6206fb2bf6ce",
+          "sourcePath": "src/components/admin/AdminWorkspaceShell.tsx"
+        }
+      ],
+      "drafts": {
+        "f0d9e8ec-bf62-4540-97ca-478d22369586": {
+          "title": "Print Shelf Labels",
+          "visualDirection": "image-box product gallery with expandable variants and sticky print summary",
+          "currentVersion": 3
+        }
+      },
+      "updatedAt": "2026-09-13T11:52:00.000Z"
+    }
+  }
+}

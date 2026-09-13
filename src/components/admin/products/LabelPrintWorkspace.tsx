@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Cable, CheckCircle2, CircleAlert, Laptop, Printer, RefreshCw } from "lucide-react";
+import { ArrowLeft, Cable, CheckCircle2, ChevronUp, CircleAlert, Laptop, Minus, Package, Plus, Printer, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { formatCedis } from "@/domain/money";
 import { getLocalPrinterStatus, sendLocalPrintJob, type LocalPrinterStatus } from "@/lib/labels/local-printer";
 import DirectUsbSetup from "@/components/printer/DirectUsbSetup";
@@ -11,7 +11,8 @@ import TillSetupHelp from "@/components/printer/TillSetupHelp";
 import { deviceLabel, sendBase64UsbJob, type UsbPrinterDevice } from "@/lib/labels/webusb-print";
 
 type LabelVariant = { id: string; sku: string; title: string; price: number };
-type LabelProduct = { id: string; name: string; variants: LabelVariant[] };
+type LabelProduct = { id: string; name: string; imageUrl: string; variants: LabelVariant[] };
+type SelectedLabel = { product: LabelProduct; variant: LabelVariant; copies: number };
 type Selection = Record<string, { checked: boolean; copies: number }>;
 type SetupState = "checking" | "choose" | "testing" | "confirm" | "ready" | "error";
 
@@ -29,6 +30,8 @@ export default function LabelPrintWorkspace() {
   const [labelsUnlocked, setLabelsUnlocked] = useState(false);
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection>({});
+  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -60,13 +63,14 @@ export default function LabelPrintWorkspace() {
       try {
         const response = await fetch("/api/admin/products?pageSize=200", { cache: "no-store" });
         const payload = (await response.json().catch(() => ({}))) as {
-          products?: Array<{ id?: unknown; name?: unknown; variants?: Array<{ id?: unknown; sku?: unknown; title?: unknown; price?: unknown }> }>;
+          products?: Array<{ id?: unknown; name?: unknown; imageUrl?: unknown; variants?: Array<{ id?: unknown; sku?: unknown; title?: unknown; price?: unknown }> }>;
         };
         if (!response.ok) throw new Error("unavailable");
         if (cancelled) return;
         setProducts((payload.products || []).map((row) => ({
           id: String(row.id ?? ""),
           name: String(row.name ?? "Product"),
+          imageUrl: String(row.imageUrl ?? ""),
           variants: (row.variants || []).map((variant) => ({
             id: String(variant.id ?? ""), sku: String(variant.sku ?? ""), title: String(variant.title ?? "Default"), price: Number(variant.price ?? 0),
           })).filter((variant) => variant.id && variant.sku),
@@ -188,9 +192,15 @@ export default function LabelPrintWorkspace() {
 
   const visible = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return (products || []).filter((product) => product.name.toLowerCase().includes(normalized) || product.variants.some((variant) => variant.sku.toLowerCase().includes(normalized)));
+    return (products || []).filter((product) => product.name.toLowerCase().includes(normalized) || product.variants.some((variant) => variant.sku.toLowerCase().includes(normalized) || variant.title.toLowerCase().includes(normalized)));
   }, [products, query]);
-  const stickerCount = Object.values(selection).reduce((sum, entry) => sum + (entry.checked ? Math.max(1, entry.copies) : 0), 0);
+  const selectedItems = useMemo<SelectedLabel[]>(() => (products || []).flatMap((product) => product.variants.flatMap((variant) => {
+    const entry = selection[variant.id];
+    return entry?.checked ? [{ product, variant, copies: Math.max(1, entry.copies) }] : [];
+  })), [products, selection]);
+  const stickerCount = selectedItems.reduce((sum, item) => sum + item.copies, 0);
+  const selectedVariantCount = selectedItems.length;
+  const selectedProductCount = new Set(selectedItems.map((item) => item.product.id)).size;
   const selectedPrinterDetails = printerStatus?.printers.find((printer) => printer.name === selectedPrinter);
   const connectedPrinters = printerStatus?.printers.filter((printer) => printer.connected) || [];
 
@@ -201,6 +211,25 @@ export default function LabelPrintWorkspace() {
   function setCopies(id: string, copies: number) {
     const safe = Number.isFinite(copies) ? Math.min(50, Math.max(1, Math.floor(copies))) : 1;
     setSelection((current) => ({ ...current, [id]: { checked: true, copies: safe } }));
+  }
+
+  function selectedVariantsFor(product: LabelProduct) {
+    return product.variants.filter((variant) => selection[variant.id]?.checked);
+  }
+
+  function toggleProductVariants(product: LabelProduct, checked: boolean) {
+    setSelection((current) => {
+      const next = { ...current };
+      for (const variant of product.variants) {
+        const entry = current[variant.id] || { checked: false, copies: 1 };
+        next[variant.id] = { ...entry, checked };
+      }
+      return next;
+    });
+  }
+
+  function toggleProductExpanded(productId: string) {
+    setExpandedProductId((current) => current === productId ? null : productId);
   }
 
   return (
@@ -236,10 +265,27 @@ export default function LabelPrintWorkspace() {
           </>}
         </section>
       ) : (
-        <section className="rounded-3xl border border-black/[0.07] bg-white p-4 shadow-sm sm:p-6"><div className="space-y-4"><div className="flex flex-col gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-900 sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2"><CheckCircle2 size={16} />{selectedPrinter} is verified for this session{transport === "usb" ? " via Direct USB" : ""}.</span><button type="button" onClick={() => { setLabelsUnlocked(false); setUsbDevice(null); setTransport("bridge"); setSetupState("choose"); }} className="text-left underline underline-offset-2">Change printer</button></div><p className="text-xs leading-5 text-[var(--color-ink-soft)]">Tick the versions to sticker and set copies. Each sticker carries the price, a QR to the product page, and the SKU. The native printer receives exact 50 × 30 mm TSPL labels. Very long product names are wrapped and safely shortened so the price and scan codes remain clear.</p>{error && <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-xs font-semibold text-red-900">{error}</p>}{notice && <div role="status" className="flex flex-col gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-900 sm:flex-row sm:items-center sm:justify-between"><span>{notice}</span></div>}
-          {unavailable ? <p className="text-xs text-[var(--color-ink-soft)]">The product list could not be loaded. Reload the page and try again.</p> : products === null ? <p className="text-xs text-[var(--color-ink-soft)]">Loading products…</p> : <><input type="search" className="admin-input" placeholder="Search products or SKUs…" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search products or SKUs" /><div className="max-h-[42rem] space-y-3 overflow-y-auto pr-1">{visible.map((product) => <fieldset key={product.id} className="rounded-2xl border border-[var(--color-line)] p-3"><legend className="px-1 text-sm font-semibold">{product.name}</legend>{product.variants.map((variant) => { const entry = selection[variant.id] || { checked: false, copies: 1 }; return <div key={variant.id} className="grid grid-cols-[auto_minmax(0,1fr)_5rem] items-center gap-3 rounded-xl px-2 py-2.5 text-sm transition hover:bg-[#f6f8f9]"><input type="checkbox" id={`label-${variant.id}`} className="h-5 w-5 accent-[var(--color-brand-deep)]" checked={entry.checked} onChange={() => toggleVariant(variant.id)} /><label htmlFor={`label-${variant.id}`} className="min-w-0 cursor-pointer leading-5"><span className="block break-words font-semibold">{variant.title}</span><span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-black/50"><span className="font-mono">{variant.sku}</span><span>{formatCedis(variant.price)}</span></span></label><input type="number" min={1} max={50} aria-label={`Copies of ${variant.sku}`} className="admin-input w-full px-2 py-2 text-center" value={entry.copies} onChange={(event) => setCopies(variant.id, Number(event.target.value))} /></div>; })}</fieldset>)}{visible.length === 0 && <p className="text-xs text-[var(--color-ink-soft)]">No products match that search.</p>}</div></>}
-          <button type="button" onClick={() => void printLabels()} disabled={busy || stickerCount === 0 || products === null} className="admin-button h-12 w-full disabled:opacity-50"><Printer size={18} />{busy ? "Sending labels…" : `Print ${stickerCount} label${stickerCount === 1 ? "" : "s"}`}</button><p className="text-xs leading-5 text-[var(--color-ink-soft)]">The test page was verified before this workspace unlocked. If the printer is moved or reloaded, use Change printer and run the test again.</p>
-        </div></section>
+        <section className="space-y-4">
+          <div className="flex flex-col gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-900 sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2"><CheckCircle2 size={16} />{selectedPrinter} is verified for this session{transport === "usb" ? " via Direct USB" : ""}.</span><button type="button" onClick={() => { setLabelsUnlocked(false); setUsbDevice(null); setTransport("bridge"); setSetupState("choose"); }} className="text-left underline underline-offset-2">Change printer</button></div>
+          {error && <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-xs font-semibold text-red-900">{error}</p>}
+          {notice && <div role="status" className="flex flex-col gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-900 sm:flex-row sm:items-center sm:justify-between"><span>{notice}</span></div>}
+          {unavailable ? <p className="rounded-3xl border border-dashed border-black/15 bg-white px-5 py-10 text-center text-xs text-[var(--color-ink-soft)]">The product list could not be loaded. Reload the page and try again.</p> : products === null ? <p className="rounded-3xl border border-dashed border-black/15 bg-white px-5 py-10 text-center text-xs text-[var(--color-ink-soft)]">Loading products…</p> : <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <section className="rounded-3xl border border-black/[0.07] bg-white p-4 shadow-sm sm:p-6">
+              <div className="flex flex-col gap-4 border-b border-black/[0.07] pb-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#28637d]">Product selector</p><h2 className="mt-2 text-2xl font-semibold tracking-tight">Choose products to print</h2><p className="mt-2 text-sm leading-6 text-[var(--color-ink-soft)]">Select a product to see its variants, prices, and copies.</p></div><div className="flex shrink-0 flex-wrap gap-2 text-xs font-semibold text-[var(--color-ink-soft)]"><span className="rounded-full bg-[var(--color-cream)] px-3 py-2">{visible.length} product{visible.length === 1 ? "" : "s"}</span><span className="rounded-full bg-[var(--color-cream)] px-3 py-2">{visible.reduce((sum, product) => sum + product.variants.length, 0)} variants</span></div></div>
+              <label className="relative mt-5 block"><Search size={17} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-black/40" /><span className="sr-only">Search products or SKUs</span><input type="search" className="admin-input pl-11" placeholder="Search products or SKUs…" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search products or SKUs" /></label>
+              <div className="mt-5 grid max-h-[48rem] gap-4 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">{visible.map((product) => { const selectedVariants = selectedVariantsFor(product); const selectedCount = selectedVariants.length; const labelCount = selectedVariants.reduce((sum, variant) => sum + Math.max(1, selection[variant.id]?.copies || 1), 0); const expanded = expandedProductId === product.id; const allSelected = selectedCount === product.variants.length && product.variants.length > 0; const partiallySelected = selectedCount > 0 && !allSelected; return <article key={product.id} className={expanded ? "overflow-hidden rounded-2xl border border-[#b0617a] bg-white shadow-md sm:col-span-2 xl:col-span-3" : "overflow-hidden rounded-2xl border border-[var(--color-line)] bg-white transition hover:-translate-y-0.5 hover:shadow-md"}>
+                <div className="relative aspect-[4/3] overflow-hidden bg-[var(--color-brand-tint)]">{product.imageUrl && !failedImages[product.id] ? <>
+                  {/* Product images are stored as arbitrary catalog URLs; next/image remote-host configuration is intentionally not required here. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" loading="lazy" onError={() => setFailedImages((current) => ({ ...current, [product.id]: true }))} />
+                </> : <div className="grid h-full place-items-center text-[#b0617a]"><Package size={42} strokeWidth={1.5} /><span className="sr-only">No product image</span></div>}<span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-ink-soft)] shadow-sm">{product.variants.length} variant{product.variants.length === 1 ? "" : "s"}</span>{labelCount > 0 && <span className="absolute right-3 top-3 rounded-full bg-[#1c1518]/90 px-2.5 py-1.5 text-[11px] font-semibold text-white">{labelCount} label{labelCount === 1 ? "" : "s"}</span>}</div>
+                <div className="p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words text-base font-semibold leading-5">{product.name}</h3><p className="mt-1 text-xs text-[var(--color-ink-soft)]">{selectedCount ? `${selectedCount} of ${product.variants.length} variants selected` : "No variants selected"}</p></div>{selectedCount > 0 && <CheckCircle2 className="shrink-0 text-[#b0617a]" size={19} aria-label="Product has selected variants" />}</div><button type="button" onClick={() => toggleProductExpanded(product.id)} aria-expanded={expanded} aria-controls={`variants-${product.id}`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--color-line)] bg-white px-3 text-xs font-semibold transition hover:bg-[var(--color-brand-tint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28637d]">{expanded ? <><ChevronUp size={16} />Hide variants</> : <><SlidersHorizontal size={16} />Choose variants</>}</button></div>
+                {expanded && <div id={`variants-${product.id}`} className="border-t border-[var(--color-line)] bg-[var(--color-cream)]/45 p-4 sm:p-5"><div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><label className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold"><input type="checkbox" aria-label={`Select all ${product.name} variants`} className="h-5 w-5 accent-[var(--color-brand-deep)]" checked={allSelected} ref={(element) => { if (element) element.indeterminate = partiallySelected; }} onChange={(event) => toggleProductVariants(product, event.target.checked)} /><span>Select all variants</span></label><span className="text-xs text-[var(--color-ink-soft)]">{selectedCount} of {product.variants.length} selected</span></div><div className="divide-y divide-[var(--color-line)] overflow-hidden rounded-xl border border-[var(--color-line)] bg-white">{product.variants.map((variant) => { const entry = selection[variant.id] || { checked: false, copies: 1 }; return <div key={variant.id} className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 p-4 text-sm transition hover:bg-[var(--color-cream)] sm:grid-cols-[auto_minmax(0,1fr)_8.5rem] ${entry.checked ? "bg-[#fdf7f9]" : ""}`}><input type="checkbox" id={`label-${variant.id}`} className="mt-1 h-5 w-5 accent-[var(--color-brand-deep)]" checked={entry.checked} onChange={() => toggleVariant(variant.id)} /><label htmlFor={`label-${variant.id}`} className="min-w-0 cursor-pointer leading-5"><span className="block break-words font-semibold">{variant.title}</span><span className="mt-1 flex flex-wrap gap-x-2 text-xs text-black/50"><span className="font-mono">{variant.sku}</span><span className="font-semibold text-[var(--color-ink)]">{formatCedis(variant.price)}</span></span>{entry.checked && <span className="mt-2 hidden text-[11px] font-semibold text-[#b0617a] sm:block">Selected for printing</span>}</label><div className="col-start-2 flex min-h-11 items-center justify-between gap-2 sm:col-start-auto sm:justify-end"><span className="text-xs font-semibold text-[var(--color-ink-soft)] sm:hidden">Copies</span><div className="flex h-11 items-center overflow-hidden rounded-xl border border-[var(--color-line)] bg-white"><button type="button" className="grid h-full w-10 place-items-center text-[var(--color-ink-soft)] transition hover:bg-[var(--color-brand-tint)] focus-visible:bg-[var(--color-brand-tint)]" aria-label={`Decrease copies of ${variant.title}`} onClick={() => setCopies(variant.id, entry.copies - 1)}><Minus size={14} /></button><input type="number" min={1} max={50} aria-label={`Copies of ${variant.sku}`} className="h-full w-10 border-x border-[var(--color-line)] text-center text-sm font-semibold" value={entry.copies} onChange={(event) => setCopies(variant.id, Number(event.target.value))} /><button type="button" className="grid h-full w-10 place-items-center text-[var(--color-ink-soft)] transition hover:bg-[var(--color-brand-tint)] focus-visible:bg-[var(--color-brand-tint)]" aria-label={`Increase copies of ${variant.title}`} onClick={() => setCopies(variant.id, entry.copies + 1)}><Plus size={14} /></button></div></div></div>; })}</div></div>}
+              </article>; })}{visible.length === 0 && <p className="rounded-2xl border border-dashed border-black/15 px-5 py-8 text-center text-xs text-[var(--color-ink-soft)] sm:col-span-2 xl:col-span-3">No products match that search.</p>}</div>
+            </section>
+            <aside className="lg:sticky lg:top-7"><div className="rounded-3xl border border-[var(--color-line)] bg-white p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#28637d]">Print summary</p><div className="mt-3 grid grid-cols-2 gap-3 border-b border-[var(--color-line)] pb-4"><div><strong className="block text-3xl font-semibold tracking-tight">{stickerCount}</strong><span className="text-xs text-[var(--color-ink-soft)]">total labels</span></div><div><strong className="block text-3xl font-semibold tracking-tight">{selectedVariantCount}</strong><span className="text-xs text-[var(--color-ink-soft)]">variants</span></div></div><p className="mt-3 text-xs font-semibold text-[var(--color-ink-soft)]">{selectedProductCount} product{selectedProductCount === 1 ? "" : "s"} selected</p><div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-1">{selectedItems.length ? selectedItems.map(({ product, variant, copies }) => <div key={variant.id} className="flex items-start justify-between gap-3 text-xs"><span className="min-w-0"><strong className="block break-words text-[var(--color-ink)]">{product.name}</strong><span className="mt-0.5 block break-words text-[var(--color-ink-soft)]">{variant.title}</span><span className="mt-0.5 block font-mono text-[var(--color-ink-soft)]">{variant.sku}</span></span><span className="shrink-0 font-semibold text-[var(--color-ink)]">× {copies}</span></div>) : <p className="text-xs leading-5 text-[var(--color-ink-soft)]">Choose a product and select its variants to build this print job.</p>}</div><button type="button" onClick={() => void printLabels()} disabled={busy || stickerCount === 0} className="admin-button mt-5 h-12 w-full disabled:opacity-50"><Printer size={18} />{busy ? "Sending labels…" : `Print ${stickerCount} label${stickerCount === 1 ? "" : "s"}`}</button><p className="mt-4 text-xs leading-5 text-[var(--color-ink-soft)]">Each sticker carries the price, a QR to the product page, and the SKU. Long product names wrap and shorten safely so the price and scan codes remain clear.</p></div></aside>
+          </div>}
+        </section>
       )}
     </div>
   );
