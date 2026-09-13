@@ -33,6 +33,8 @@ type VariantRow = {
   price: number | string;
   compare_at_price: number | string | null;
   is_default: boolean;
+  /** In the anon grant (unlike cost_price/barcode), so this select is safe. */
+  sku: string;
 };
 
 type MediaRow = {
@@ -179,7 +181,7 @@ export const loadStorefrontProduct = cache(async (slug: string) => {
       productQuery(`${productColumns},options`),
       supabase
         .from("product_variants")
-        .select("id,title,option_values,price,compare_at_price,is_default")
+        .select("id,title,option_values,price,compare_at_price,is_default,sku")
         .eq("product_id", productId)
         .eq("is_active", true),
       mediaQuery(`${mediaColumns},variant_id`),
@@ -237,6 +239,13 @@ export const loadStorefrontProduct = cache(async (slug: string) => {
       isDefault: isDefaultById.get(variant.id) === true,
       ...(imageByVariantId.has(variant.id) ? { imageUrl: imageByVariantId.get(variant.id) } : {}),
     }));
+    const skuByVariantId = new Map(
+      variants.filter((variant) => typeof variant.sku === "string").map((variant) => [variant.id, variant.sku.trim()]),
+    );
+    for (const mapped of mappedVariants) {
+      const sku = skuByVariantId.get(mapped.id);
+      if (sku) mapped.sku = sku;
+    }
     const range = priceRange(mappedVariants);
     const openingPrice = Number(defaultVariant?.price ?? row.price) || fallback.price;
     const product: StorefrontProduct = {

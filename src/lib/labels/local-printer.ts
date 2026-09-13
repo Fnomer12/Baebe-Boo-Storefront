@@ -38,7 +38,7 @@ async function bridgeRequest<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch {
     throw new Error(
-      "The local printer connector is not running on this workstation. Start it, then refresh the printer list.",
+      "The printer connector is not running on this same till. Start it on this till (not another computer), then press Retry.",
     );
   }
 

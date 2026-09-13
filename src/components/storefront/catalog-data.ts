@@ -10,6 +10,8 @@ export type StorefrontVariant = {
   optionValues: OptionSelection;
   price: number;
   isDefault?: boolean;
+  /** Variant SKU, used to preselect the version from a sticker QR `?sku=`. */
+  sku?: string;
   /** The photo this version swaps the gallery to, from `product_media.variant_id`. */
   imageUrl?: string;
 };

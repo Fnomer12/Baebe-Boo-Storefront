@@ -112,6 +112,35 @@ export function optionAvailability(
 }
 
 /**
+ * The option choices of the variant carrying a SKU (sticker QR `?sku=`), or
+ * null when no live variant matches. Lets a scanned sticker land the shopper
+ * on the exact version instead of the default one.
+ */
+export function selectionForSku(
+  variants: readonly (SelectableVariant & { sku?: unknown })[],
+  options: readonly ProductOption[],
+  sku: string,
+): OptionSelection | null {
+  const needle = sku.trim().toLowerCase();
+  if (!needle) return null;
+  const match = variants.find(
+    (variant) =>
+      variantIsActive(variant) &&
+      typeof variant.sku === "string" &&
+      variant.sku.trim().toLowerCase() === needle,
+  );
+  if (!match) return null;
+  const values = variantOptionValues(match);
+  if (options.length === 0) return values;
+  const selection: OptionSelection = {};
+  for (const option of options) {
+    const key = optionKey(option.name);
+    if (values[key]) selection[key] = values[key];
+  }
+  return selection;
+}
+
+/**
  * What the page opens on.
  *
  * The product's default variant leads, because that is the row whose price and

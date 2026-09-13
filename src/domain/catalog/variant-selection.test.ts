@@ -4,6 +4,7 @@ import {
   findVariantForSelection,
   optionAvailability,
   priceRange,
+  selectionForSku,
   type SelectableVariant,
 } from "./variant-selection";
 
@@ -84,6 +85,28 @@ describe("defaultSelection", () => {
 
   it("still returns a selection when nothing is on sale", () => {
     expect(defaultSelection(options, [])).toEqual({ colour: "Pink", size: "3M" });
+  });
+});
+
+describe("selectionForSku", () => {
+  const stocked = [
+    { ...variant("Pink", "3M", { is_default: true }), sku: "BB-PINK-3M" },
+    { ...variant("Blue", "6M"), sku: "BB-BLUE-6M" },
+    { ...variant("Pink", "6M", { is_active: false }), sku: "BB-PINK-6M-OLD" },
+  ];
+
+  it("lands a sticker scan on the exact version", () => {
+    expect(selectionForSku(stocked, options, "BB-BLUE-6M")).toEqual({ colour: "Blue", size: "6M" });
+  });
+
+  it("matches however the code was cased or spaced", () => {
+    expect(selectionForSku(stocked, options, "  bb-pink-3m ")).toEqual({ colour: "Pink", size: "3M" });
+  });
+
+  it("ignores unknown, blank, and discontinued SKUs", () => {
+    expect(selectionForSku(stocked, options, "BB-NOPE")).toBeNull();
+    expect(selectionForSku(stocked, options, "   ")).toBeNull();
+    expect(selectionForSku(stocked, options, "BB-PINK-6M-OLD")).toBeNull();
   });
 });
 

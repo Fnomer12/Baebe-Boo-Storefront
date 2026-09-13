@@ -1,0 +1,27 @@
+Subject: Request for permission to redistribute the XP-365B Windows driver to our shop tills
+
+Dear XPrinter support team,
+
+We run a small retail chain whose point-of-sale tills use the XPrinter XP-365B
+(USB, hardware ID USBPRINT\XPRINTERXP-365B6494) on Windows 10/11 x64.
+
+To keep our shop staff away from third-party driver download sites, we would
+like your written permission to host an unmodified copy of the official
+"Label printer (Windows)" driver package on our own release server and to
+install it silently from our open-source till setup script. Details of our
+proposal:
+
+- File hosted unmodified, with the SHA-256 checksum published next to it.
+- Clearly labelled as XPrinter's package with a link to your official drivers
+  page (https://www.xprintertech.com/drivers-2.html).
+- Used only to set up printers owned by our shops; not bundled into any
+  product for resale or offered to the general public.
+- We will refresh the hosted copy when you publish a new version.
+
+Please reply confirming whether this use is acceptable, and whether you want
+any specific attribution wording or version-pinning conditions.
+
+Kind regards,
+[Your name]
+Baebe Boo
+[Contact email / phone]

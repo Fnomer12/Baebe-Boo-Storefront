@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Baebe Boo Printer Connector
+Comment=Lets the Baebe Boo admin/counter portal print to this workstation's USB printer
+Exec=%h/.local/share/baebe-bridge/baebe-bridge.sh
+Icon=printer
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true

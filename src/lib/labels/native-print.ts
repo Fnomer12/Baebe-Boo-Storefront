@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ShelfLabel } from "@/lib/labels/label-pdf";
+import type { LabelSizeId, ShelfLabel } from "@/lib/labels/label-pdf";
 import { counterReceiptUrl } from "@/lib/counter/receipt-link";
 
 function ascii(value: string, maxLength = 32): string {
@@ -45,7 +45,41 @@ function fixedLines(value: string, maxLength: number, maxLines = 2): string[] {
   return lines;
 }
 
-export function buildNativeLabelJob(labels: ShelfLabel[]): Buffer {
+export function buildNativeLabelJob(labels: ShelfLabel[], sizeId: LabelSizeId = "50x30"): Buffer {
+  if (sizeId === "30x50") return buildPortraitLabelJob(labels);
+  const commands = [
+    "SIZE 50 mm,30 mm",
+    "GAP 2 mm,0 mm",
+    "DENSITY 8",
+    "DIRECTION 1",
+    "REFERENCE 0,0",
+    "CLS",
+  ];
+
+  for (const label of labels) {
+    const productLines = wrap(label.productName, 27, 2);
+    const variantLines = wrap(label.variantLabel, 27, 1);
+    const skuLines = fixedLines(`SKU ${label.sku}`, 40, 1);
+    commands.push(
+      tsplText(8, 6, label.shopName.toUpperCase(), 27),
+      `QRCODE 8,26,L,2,A,0,"${ascii(label.url, 220)}"`,
+      tsplText(112, 30, "SCAN QR", 12),
+      tsplText(112, 46, "PRODUCT", 12),
+      tsplText(112, 66, priceText(label.price), 24, 2),
+      `BAR 8,116,384,1`,
+      ...productLines.map((line, index) => tsplText(8, 124 + index * 19, line, 27)),
+      ...variantLines.map((line, index) => tsplText(8, 124 + productLines.length * 19 + 4 + index * 15, line, 27)),
+      `BARCODE 8,182,"128",30,0,0,1,1,"${ascii(label.sku, 24)}"`,
+      ...skuLines.map((line, index) => tsplText(8, 216 + index * 16, line, 40)),
+      "PRINT 1,1",
+      "CLS",
+    );
+  }
+  return Buffer.from(`${commands.join("\n")}\n`, "ascii");
+}
+
+/** Portrait 30x50 mm layout, kept for tills still loaded with portrait stock. */
+function buildPortraitLabelJob(labels: ShelfLabel[]): Buffer {
   const commands = [
     "SIZE 30 mm,50 mm",
     "GAP 2 mm,0 mm",
@@ -86,7 +120,31 @@ export function buildNativeLabelJob(labels: ShelfLabel[]): Buffer {
   return Buffer.from(`${commands.join("\n")}\n`, "ascii");
 }
 
-export function buildNativeCalibrationJob(): Buffer {
+export function buildNativeCalibrationJob(sizeId: LabelSizeId = "50x30"): Buffer {
+  if (sizeId === "30x50") return buildPortraitCalibrationJob();
+  const commands = [
+    "SIZE 50 mm,30 mm",
+    "GAP 2 mm,0 mm",
+    "DENSITY 8",
+    "DIRECTION 1",
+    "REFERENCE 0,0",
+    "CLS",
+    `BOX 4,4,396,236,2`,
+    `QRCODE 12,24,L,2,A,0,"https://baebe-boo.jtechinnovations.tech/products/calibration-test?sku=TEST-SKU"`,
+    tsplText(120, 28, "50 x 30 MM", 12),
+    tsplText(120, 48, "STICKER TEST", 12),
+    tsplText(120, 68, "GHS 123.45", 12, 2),
+    `BAR 12,120,376,1`,
+    tsplText(12, 130, "50 x 30 MM TEST", 27),
+    `BARCODE 12,158,"128",34,0,0,2,2,"TEST-SKU-123"`,
+    tsplText(12, 198, "SKU TEST-SKU-123", 27),
+    "PRINT 1,1",
+  ];
+  return Buffer.from(`${commands.join("\n")}\n`, "ascii");
+}
+
+/** Portrait 30x50 mm test page, kept for tills still loaded with portrait stock. */
+function buildPortraitCalibrationJob(): Buffer {
   const commands = [
     "SIZE 30 mm,50 mm",
     "GAP 2 mm,0 mm",

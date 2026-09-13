@@ -3,13 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { Cable, CheckCircle2, CircleAlert, Laptop, Printer, RefreshCw } from "lucide-react";
 import { getLocalPrinterStatus, sendLocalPrintJob, type LocalPrinterStatus } from "@/lib/labels/local-printer";
+import DirectUsbSetup from "@/components/printer/DirectUsbSetup";
+import DriverDownloadCard from "@/components/printer/DriverDownloadCard";
+import TillSetupHelp from "@/components/printer/TillSetupHelp";
+import { deviceLabel, type UsbPrinterDevice } from "@/lib/labels/webusb-print";
+
+export type VerifiedPrinterVia = { transport: "usb"; device: UsbPrinterDevice };
 
 export default function CounterPrinterSetup({
   open,
   onVerified,
 }: {
   open: boolean;
-  onVerified: (printer: string) => void;
+  onVerified: (printer: string, via?: VerifiedPrinterVia) => void;
 }) {
   const [status, setStatus] = useState<LocalPrinterStatus | null>(null);
   const [selected, setSelected] = useState("");
@@ -38,8 +44,7 @@ export default function CounterPrinterSetup({
     return () => window.clearTimeout(timer);
   }, [load, open]);
 
-  async function test() {
-    if (!selected) {
+  async function test() {    if (!selected) {
       setMessage("Choose the connected printer first.");
       return;
     }
@@ -63,6 +68,37 @@ export default function CounterPrinterSetup({
     }
   }
 
+  async function getUsbTestJob() {
+    const response = await fetch("/api/counter/printer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "test-job" }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as { message?: string; title?: string; jobBase64?: string };
+    if (!response.ok) throw new Error(payload.message || "The printer test could not be sent.");
+    if (!payload.jobBase64) throw new Error("The server did not return a printer test job.");
+    return { title: payload.title, jobBase64: payload.jobBase64 };
+  }
+
+  async function handleUsbVerified(device: UsbPrinterDevice, usbJobId: string) {
+    setState("testing");
+    setMessage("");
+    try {
+      const printer = deviceLabel(device).slice(0, 128);
+      const response = await fetch("/api/counter/printer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify", printer, bridgeJobId: usbJobId }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) throw new Error(payload.message || "The printer verification could not be saved.");
+      onVerified(printer, { transport: "usb", device });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The printer verification could not be saved.");
+      setState("choose");
+    }
+  }
+
   if (!open) return null;
 
   return (
@@ -70,13 +106,16 @@ export default function CounterPrinterSetup({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-brand-deep)]">Printer setup</p>
-          <h3 className="mt-1 text-lg font-semibold">Connect before printing</h3>
-        <p className="mt-1 text-xs leading-5 text-[var(--color-ink-soft)]">Choose a printer from this workstation, print an 80 mm receipt test page, then confirm it came out.</p>
+          <h3 className="mt-1 text-lg font-semibold">Set up this till&apos;s printer</h3>
+        <p className="mt-1 text-xs leading-5 text-[var(--color-ink-soft)]">Do this once on each till. Pick its printer, print a test receipt, and confirm it came out.</p>
       </div>
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--color-brand-tint)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-brand-deep)]"><Laptop size={13} />{status?.host || "Checking workstation…"}</span>
       </div>
 
-      {state === "checking" ? <p className="mt-4 rounded-xl border border-dashed border-[var(--color-line)] px-3 py-5 text-center text-xs text-[var(--color-ink-soft)]">Checking this workstation&apos;s local printer connector…</p> : state === "error" ? <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-900"><span className="flex items-center gap-2"><CircleAlert size={15} />{message}</span><button type="button" onClick={() => void load()} className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-white px-2"><RefreshCw size={13} />Retry</button></div> : <>
+      {state === "checking" ? <p className="mt-4 rounded-xl border border-dashed border-[var(--color-line)] px-3 py-5 text-center text-xs text-[var(--color-ink-soft)]">Setting up this till&apos;s printer…</p> : state === "error" ? <><div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-900"><span className="flex items-center gap-2"><CircleAlert size={15} />{message}</span><button type="button" onClick={() => void load()} className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-white px-2"><RefreshCw size={13} />Retry</button></div><TillSetupHelp onRetry={() => void load()} /></> : <>
+        <DirectUsbSetup getTestJob={getUsbTestJob} onVerified={(device, usbJobId) => void handleUsbVerified(device, usbJobId)} />
+        <p className="mt-4 text-xs font-bold uppercase tracking-widest text-[var(--color-ink-soft)]">Or use the connector app</p>
+        <DriverDownloadCard />
         <div className="mt-4 space-y-2">
           {status?.printers.map((printer) => {
             const active = printer.name === selected;

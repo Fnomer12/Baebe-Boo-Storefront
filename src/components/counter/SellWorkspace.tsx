@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ShoppingBag } from "lucide-react";
+import { ChevronLeft, ChevronRight, ScanLine, ShoppingBag } from "lucide-react";
 import {
   AdminEmptyState,
   AdminErrorState,
@@ -42,6 +42,7 @@ import CounterCartPanel from "./CounterCartPanel";
 import CounterProductCard from "./CounterProductCard";
 import CounterVariantPicker from "./CounterVariantPicker";
 import CounterReceiptPrintModal, { type CounterReceiptForPrint } from "./CounterReceiptPrintModal";
+import ScanCameraModal, { signalSaleAdded } from "./ScanCameraModal";
 import { AdminHint } from "@/components/admin/AdminHint";
 
 const PAGE_SIZE = 12;
@@ -72,6 +73,7 @@ export default function SellWorkspace() {
 
   const [query, setQuery] = useState("");
   const [scanValue, setScanValue] = useState("");
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const [ageRange, setAgeRange] = useState(ALL_AGE_RANGES);
   const [page, setPage] = useState(1);
@@ -164,7 +166,7 @@ export default function SellWorkspace() {
   const handleScan = useCallback(
     (value: string) => {
       const sku = extractCounterScanSku(value);
-      if (!sku) return;
+      if (!sku) return false;
 
       const matches = items.filter(
         (item) =>
@@ -178,7 +180,7 @@ export default function SellWorkspace() {
             ? `No in-stock product was found for “${sku}”.`
             : `More than one stocked product uses SKU “${sku}”. Ask an admin to fix the duplicate.`,
         );
-        return;
+        return false;
       }
 
       const item = matches[0];
@@ -186,7 +188,9 @@ export default function SellWorkspace() {
       setScanError("");
       setScanValue("");
       setNotice(`Added ${item.name}${item.variantTitle ? ` · ${item.variantTitle}` : ""}.`);
+      signalSaleAdded();
       requestAnimationFrame(() => scanInputRef.current?.focus());
+      return true;
     },
     [addVariant, items],
   );
@@ -288,8 +292,16 @@ export default function SellWorkspace() {
           Scan product sticker
         </label>
         <p className="mt-1 text-xs text-[var(--color-ink-soft)]">
-          Scan the barcode or QR code and press Enter. The matching in-stock version is added automatically.
+          Point the camera at the sticker, or use a handheld scanner and press Enter. The matching in-stock version
+          is added automatically.
         </p>
+        <button
+          type="button"
+          onClick={() => setCameraOpen(true)}
+          className="admin-button mt-3 min-h-12 w-full text-sm"
+        >
+          <ScanLine size={18} /> Scan with this till&apos;s camera
+        </button>
         <input
           ref={scanInputRef}
           id="counter-product-scan"
@@ -304,7 +316,7 @@ export default function SellWorkspace() {
             handleScan(scanValue);
           }}
           className="admin-input mt-3"
-          placeholder="Scan SKU barcode or QR code…"
+          placeholder="Or scan with a handheld scanner, then press Enter…"
           autoComplete="off"
           inputMode="text"
         />
@@ -314,6 +326,7 @@ export default function SellWorkspace() {
           </p>
         )}
       </section>
+      <ScanCameraModal open={cameraOpen} onDecode={handleScan} onClose={() => setCameraOpen(false)} />
 
       <AdminFilterBar
         query={query}

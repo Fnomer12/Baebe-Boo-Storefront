@@ -1,0 +1,20 @@
+[Unit]
+Description=Baebe Boo local printer connector
+Documentation=https://baebe-boo.jtechinnovations.tech
+After=network.target cups.service
+Wants=cups.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/baebe-bridge/baebe-bridge.sh
+Restart=on-failure
+RestartSec=3
+Environment=BAEBE_PRINTER_BRIDGE_PORT=3210
+# Add extra origins (space-separated) in ~/.config/baebe-bridge/env, e.g.:
+# BAEBE_PRINTER_ALLOWED_ORIGINS=https://your-site.example,http://localhost:3000
+EnvironmentFile=-%h/.config/baebe-bridge/env
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

@@ -6,7 +6,7 @@ import { Check, GitCompareArrows, Heart, ShoppingBag } from "lucide-react";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { optionKey, type OptionSelection } from "@/domain/catalog/product-options";
 import { applyOptionChoice } from "@/domain/catalog/option-picker";
-import { defaultSelection, findVariantForSelection, optionAvailability } from "@/domain/catalog/variant-selection";
+import { defaultSelection, findVariantForSelection, optionAvailability, selectionForSku } from "@/domain/catalog/variant-selection";
 import { formatPrice, productPriceRange, type StorefrontProduct } from "./catalog-data";
 import { whatsappUrl } from "./StorefrontChrome";
 import { addProductToCart, compareProductIds, productListContains, recordRecentlyViewed, selectedStore, storefrontKeys, toggleProductList } from "@/lib/storefront-state";
@@ -105,6 +105,20 @@ export default function ProductActions({ product }: { product: StorefrontProduct
       window.removeEventListener("baebe_wishlist_hydrated", refreshWishlist);
     };
   }, [product.id]);
+
+  // Sticker QR codes carry ?sku=: land a scanner on the exact version instead
+  // of the default one. Unknown codes keep the default selection.
+  useEffect(() => {
+    let sku = "";
+    try {
+      sku = new URLSearchParams(window.location.search).get("sku") || "";
+    } catch {
+      return;
+    }
+    if (!sku.trim()) return;
+    const match = selectionForSku(variants, options, sku);
+    if (match && Object.keys(match).length > 0) setSelection(match);
+  }, [options, variants]);
 
   useEffect(() => {
     if (!hasLiveProductId) return;

@@ -91,7 +91,7 @@ async function code128Png(text: string): Promise<Buffer> {
  */
 export async function renderShelfLabelsPdf(
   labels: ShelfLabel[],
-  sizeId: LabelSizeId = "30x50",
+  sizeId: LabelSizeId = "50x30",
 ): Promise<Buffer> {
   if (labels.length === 0) throw new Error("At least one label is required.");
   if (labels.length > 200) throw new Error("Print at most 200 labels at a time.");
@@ -208,7 +208,7 @@ export async function renderShelfLabelsPdf(
  * XP-365B — if the border measures 50×30mm and the phone scans both codes,
  * the batch will be right.
  */
-export async function renderLabelCalibrationPdf(sizeId: LabelSizeId = "30x50"): Promise<Buffer> {
+export async function renderLabelCalibrationPdf(sizeId: LabelSizeId = "50x30"): Promise<Buffer> {
   const assets = loadReceiptAssets();
   const { widthMm, heightMm } = LABEL_SIZES[sizeId];
   const pageWidth = widthMm / MM_TO_PT;
@@ -222,7 +222,7 @@ export async function renderLabelCalibrationPdf(sizeId: LabelSizeId = "30x50"): 
   doc.registerFont("regular", assets.regular);
   doc.registerFont("bold", assets.bold);
 
-  // True-size border: measure this with a ruler. 30×50 or the driver scaled it.
+  // True-size border: measure this with a ruler. 50×30 or the driver scaled it.
   doc.rect(1, 1, pageWidth - 2, pageHeight - 2).lineWidth(0.75).stroke("#111111");
 
   // Millimetre ruler along the top edge.

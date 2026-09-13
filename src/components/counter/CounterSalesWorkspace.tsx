@@ -12,7 +12,8 @@ import {
 } from "@/components/admin/AdminWorkspacePrimitives";
 import { formatCedis } from "@/domain/counter/money";
 import { sendLocalPrintJob } from "@/lib/labels/local-printer";
-import CounterPrinterSetup from "./CounterPrinterSetup";
+import { sendBase64UsbJob, type UsbPrinterDevice } from "@/lib/labels/webusb-print";
+import CounterPrinterSetup, { type VerifiedPrinterVia } from "./CounterPrinterSetup";
 
 type CounterSaleSummary = {
   id: string;
@@ -66,6 +67,19 @@ export default function CounterSalesWorkspace() {
   const [receiptNotice, setReceiptNotice] = useState("");
   const [printerSetupOpen, setPrinterSetupOpen] = useState(false);
   const [verifiedPrinter, setVerifiedPrinter] = useState("");
+  const [usbDevice, setUsbDevice] = useState<UsbPrinterDevice | null>(null);
+
+  const handlePrinterVerified = useCallback((printer: string, via?: VerifiedPrinterVia) => {
+    setVerifiedPrinter(printer);
+    setUsbDevice(via?.transport === "usb" ? via.device : null);
+    setPrinterSetupOpen(false);
+    setReceiptError("");
+    setReceiptNotice(
+      via?.transport === "usb"
+        ? "USB printer verified. Press print again to send this receipt over Direct USB."
+        : "Printer verified. Press print again to send this receipt.",
+    );
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -134,12 +148,17 @@ export default function CounterSalesWorkspace() {
         throw new Error(payload?.message || "The receipt could not be printed.");
       }
       if (!payload?.jobBase64) throw new Error("The server did not return a printable receipt job.");
-      const printed = await sendLocalPrintJob({
-        printer: verifiedPrinter,
-        title: payload.title || "Baebe Boo counter receipt",
-        jobBase64: payload.jobBase64,
-      });
-      setReceiptNotice(`Receipt sent to ${printed.printer} (${printed.jobId}).`);
+      if (usbDevice) {
+        const jobId = await sendBase64UsbJob(usbDevice, payload.jobBase64);
+        setReceiptNotice(`Receipt sent via Direct USB (${jobId}).`);
+      } else {
+        const printed = await sendLocalPrintJob({
+          printer: verifiedPrinter,
+          title: payload.title || "Baebe Boo counter receipt",
+          jobBase64: payload.jobBase64,
+        });
+        setReceiptNotice(`Receipt sent to ${printed.printer} (${printed.jobId}).`);
+      }
     } catch (printError) {
       setReceiptError(printError instanceof Error ? printError.message : "The receipt could not be printed.");
     } finally {
@@ -328,12 +347,7 @@ export default function CounterSalesWorkspace() {
             )}
             <CounterPrinterSetup
               open={printerSetupOpen}
-              onVerified={(printer) => {
-                setVerifiedPrinter(printer);
-                setPrinterSetupOpen(false);
-                setReceiptError("");
-                setReceiptNotice("Printer verified. Press print again to send this receipt.");
-              }}
+              onVerified={handlePrinterVerified}
             />
             <button
               type="button"

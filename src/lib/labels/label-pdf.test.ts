@@ -41,6 +41,21 @@ describe("renderShelfLabelsPdf", () => {
     expect(pageCount(pdf)).toBe(2);
   });
 
+  it("defaults to landscape 50x30mm pages for the till stock", async () => {
+    const pdf = await renderShelfLabelsPdf([label()]);
+    const text = pdf.toString("latin1");
+    const boxes = [...text.matchAll(/\/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]/g)];
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const box of boxes) {
+      const width = Number(box[3]) - Number(box[1]);
+      const height = Number(box[4]) - Number(box[2]);
+      // 50mm ≈ 141.7pt wide, 30mm ≈ 85pt tall.
+      expect(width).toBeGreaterThan(height);
+      expect(width).toBeCloseTo(141.73, 0);
+      expect(height).toBeCloseTo(85.04, 0);
+    }
+  });
+
   it("refuses an empty or oversized batch rather than hanging the server", async () => {
     await expect(renderShelfLabelsPdf([])).rejects.toThrow(/at least one/i);
     await expect(

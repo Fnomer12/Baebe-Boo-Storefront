@@ -1,0 +1,26 @@
+{
+  "$comment": "Single source of truth for vendored printer drivers. Verified entries must be fully pinned so installs fail closed on mismatch (see packages/printer-bridge/README.md, driver section).",
+  "version": 1,
+  "updated": "2026-09-13",
+  "drivers": [
+    {
+      "model": "XPrinter XP-365B",
+      "os": "windows",
+      "arch": "x64",
+      "osVersions": ["10", "11"],
+      "vendor": "XPrinter",
+      "vendorVersion": "12.6.0.0",
+      "status": "verified",
+      "fileName": "Xprinter_12.6.exe",
+      "downloadUrl": "https://github.com/Fnomer12/Baebe-Boo-Storefront/releases/download/driver-xp365b-12.6/Xprinter_12.6.exe",
+      "sha256": "c52cf3b5a5771efbf8d85830919d838131e393c727c37b58336e0b783c014819",
+      "sizeBytes": 115335968,
+      "hardwareId": "USBPRINT\\XPRINTERXP-365B6494",
+      "inf": "Xprinter.inf",
+      "driverName": "Xprinter XP-365B",
+      "silentArgs": ["/S"],
+      "vendorPage": "https://www.xprintertech.com/drivers-2.html",
+      "notes": "Unmodified Seagull DPack self-extracting pack (DriverVer 08/04/2026, signed Xprinter.cat), fetched 2026-09-13. Full multi-model pack (~109MB); XP-365B entry confirmed in Xprinter.inf. Redistribution permission requested from XPrinter; see driver-permission-request.txt."
+    }
+  ]
+}

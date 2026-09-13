@@ -17,13 +17,27 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     const developmentEval = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
+    // The workstation printer bridge lives on loopback (default
+    // http://127.0.0.1:3210, overridable via NEXT_PUBLIC_PRINTER_BRIDGE_URL).
+    // Without these origins, connect-src blocks the browser from ever reaching
+    // the till's own connector. Loopback-only: a page can only talk to the
+    // visitor's own machine, never to anyone else's network.
+    const bridgeOrigins = Array.from(
+      new Set(
+        [
+          (process.env.NEXT_PUBLIC_PRINTER_BRIDGE_URL || "http://127.0.0.1:3210").trim().replace(/\/+$/, ""),
+          "http://127.0.0.1:3210",
+          "http://localhost:3210",
+        ].filter(Boolean),
+      ),
+    ).join(" ");
     const contentSecurityPolicy = [
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${developmentEval} https://js.paystack.co https://checkout.paystack.com https://www.googletagmanager.com https://connect.facebook.net https://analytics.tiktok.com https://www.clarity.ms`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https://*.supabase.co",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.paystack.co https://www.google-analytics.com https://analytics.google.com https://www.facebook.com https://analytics.tiktok.com https://www.clarity.ms",
+      `connect-src 'self' ${bridgeOrigins} https://*.supabase.co wss://*.supabase.co https://api.paystack.co https://www.google-analytics.com https://analytics.google.com https://www.facebook.com https://analytics.tiktok.com https://www.clarity.ms`,
       "frame-src https://checkout.paystack.com https://www.openstreetmap.org",
       "object-src 'none'",
       "base-uri 'self'",

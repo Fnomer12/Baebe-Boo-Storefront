@@ -4,7 +4,8 @@ import { useState } from "react";
 import { CheckCircle2, Printer } from "lucide-react";
 import { AdminModal } from "@/components/admin/AdminWorkspacePrimitives";
 import { sendLocalPrintJob } from "@/lib/labels/local-printer";
-import CounterPrinterSetup from "./CounterPrinterSetup";
+import { sendBase64UsbJob, type UsbPrinterDevice } from "@/lib/labels/webusb-print";
+import CounterPrinterSetup, { type VerifiedPrinterVia } from "./CounterPrinterSetup";
 
 export type CounterReceiptForPrint = {
   id: string;
@@ -38,6 +39,19 @@ export default function CounterReceiptPrintModal({
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [verifiedPrinter, setVerifiedPrinter] = useState("");
+  const [usbDevice, setUsbDevice] = useState<UsbPrinterDevice | null>(null);
+
+  function handleVerified(printer: string, via?: VerifiedPrinterVia) {
+    setVerifiedPrinter(printer);
+    setUsbDevice(via?.transport === "usb" ? via.device : null);
+    setPrinterSetupOpen(false);
+    setError("");
+    setNotice(
+      via?.transport === "usb"
+        ? "USB printer verified. Press Print Receipt to send over Direct USB."
+        : "Printer verified. Press Print Receipt to send this receipt.",
+    );
+  }
 
   async function printReceipt() {
     if (!receipt) return;
@@ -61,8 +75,13 @@ export default function CounterReceiptPrintModal({
         throw new Error(payload?.message || "The receipt could not be printed.");
       }
       if (!payload?.jobBase64) throw new Error("The server did not return a printable receipt job.");
-      const printed = await sendLocalPrintJob({ printer: verifiedPrinter, title: payload.title || "Baebe Boo counter receipt", jobBase64: payload.jobBase64 });
-      setNotice(`Receipt sent to ${printed.printer} (${printed.jobId}).`);
+      if (usbDevice) {
+        const jobId = await sendBase64UsbJob(usbDevice, payload.jobBase64);
+        setNotice(`Receipt sent via Direct USB (${jobId}).`);
+      } else {
+        const printed = await sendLocalPrintJob({ printer: verifiedPrinter, title: payload.title || "Baebe Boo counter receipt", jobBase64: payload.jobBase64 });
+        setNotice(`Receipt sent to ${printed.printer} (${printed.jobId}).`);
+      }
     } catch (printError) {
       setError(printError instanceof Error ? printError.message : "The receipt could not be printed.");
     } finally {
@@ -113,12 +132,7 @@ export default function CounterReceiptPrintModal({
 
         <CounterPrinterSetup
           open={printerSetupOpen}
-          onVerified={(printer) => {
-            setVerifiedPrinter(printer);
-            setPrinterSetupOpen(false);
-            setError("");
-            setNotice("Printer verified. Press Print Receipt to send this receipt.");
-          }}
+          onVerified={handleVerified}
         />
 
         <div className="grid gap-3 sm:grid-cols-2">

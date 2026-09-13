@@ -1,8 +1,11 @@
 #!/usr/bin/env node
+// Baebe Boo local printer connector. Runs on the till (not the server):
+//   node scripts/local-printer-bridge.mjs [--doctor]
+// --doctor prints a plain-language readiness report and exits (exit 0 = ready).
 
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { hostname, platform } from "node:os";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -246,7 +249,112 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`${SERVICE} ${VERSION} listening on http://127.0.0.1:${PORT}`);
-  console.log(`Allowed origins: ${[...allowedOrigins].join(", ")}`);
-});
+if (!process.argv.includes("--doctor")) {
+  server.on("error", (error) => {
+    if (error && error.code === "EADDRINUSE") {
+      console.error(`Baebe Boo printer connector: port ${PORT} is already in use by another program.`);
+      console.error("Stop the other program (or pick a free port with BAEBE_PRINTER_BRIDGE_PORT) and start again.");
+      process.exit(2);
+      return;
+    }
+    console.error(`Baebe Boo printer connector could not start listening: ${error instanceof Error ? error.message : error}`);
+    process.exit(1);
+  });
+
+  server.listen(PORT, "127.0.0.1", () => {
+    console.log(`${SERVICE} ${VERSION} listening on http://127.0.0.1:${PORT}`);
+    console.log(`Allowed origins: ${[...allowedOrigins].join(", ")}`);
+  });
+}
+
+function hasCommand(name) {
+  const probe = spawnSync("sh", ["-c", `command -v ${name}`]);
+  if (probe.status === 0) return true;
+  if (platform() === "win32") {
+    return spawnSync("cmd.exe", ["/c", `where ${name}`]).status === 0;
+  }
+  return false;
+}
+
+function fetchHealth(port, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    const req = httpRequest({ host: "127.0.0.1", port, path: "/health", method: "GET", timeout: timeoutMs }, (res) => {
+      let body = "";
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => resolve({ ok: res.statusCode === 200, body }));
+    });
+    req.on("timeout", () => { req.destroy(); resolve({ ok: false, body: "" }); });
+    req.on("error", () => resolve({ ok: false, body: "" }));
+    req.end();
+  });
+}
+
+/** Plain-language readiness report for till staff/support. Exit 0 = ready. */
+async function doctor() {
+  const lines = [];
+  let ready = true;
+  const fail = (text) => { ready = false; lines.push(`FAIL  ${text}`); };
+  const pass = (text) => lines.push(`OK    ${text}`);
+
+  const nodeMajor = Number(process.versions.node.split(".")[0]);
+  if (nodeMajor >= 20) pass(`Node ${process.versions.node} (needs 20+).`);
+  else fail(`Node ${process.versions.node} is too old (needs 20+). Install Node 22 and try again.`);
+
+  if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+    fail(`Port "${process.env.BAEBE_PRINTER_BRIDGE_PORT}" is not a valid port number. Unset BAEBE_PRINTER_BRIDGE_PORT and try again.`);
+  } else {
+    pass(`Port ${PORT} configured.`);
+  }
+
+  if (platform() === "win32") {
+    if (hasCommand("powershell.exe")) pass("PowerShell found (used to list Windows printers).");
+    else fail("powershell.exe not found. Repair Windows or reinstall PowerShell.");
+  } else {
+    const missing = ["lpstat", "lp"].filter((tool) => !hasCommand(tool));
+    if (missing.length === 0) pass("CUPS tools found (lpstat, lp).");
+    else fail(`Missing CUPS tools: ${missing.join(", ")}. Install with: sudo apt install cups-client (Debian/Ubuntu).`);
+  }
+
+  try {
+    const printers = await listPrinters();
+    const connected = printers.filter((printer) => printer.connected);
+    if (connected.length > 0) {
+      pass(`${connected.length} connected printer(s): ${connected.map((printer) => printer.name).join(", ")}.`);
+    } else if (printers.length > 0) {
+      fail(`${printers.length} printer(s) seen but none connected: ${printers.map((printer) => printer.name).join(", ")}. Switch one on, plug in USB, clear any error, then re-run.`);
+    } else {
+      fail("No printers found. Install the printer driver, plug in the powered-on printer, print an OS test page, then re-run.");
+    }
+  } catch (error) {
+    fail(`Could not list printers: ${error instanceof Error ? error.message : error}`);
+  }
+
+  const health = await fetchHealth(PORT);
+  if (health.ok) {
+    let ours = false;
+    try {
+      ours = JSON.parse(health.body || "{}").service === SERVICE;
+    } catch { ours = false; }
+    if (ours) pass(`This connector already answers on http://127.0.0.1:${PORT}/health. You are done.`);
+    else fail(`Port ${PORT} is taken by another program (it answers, but it is not this connector). Stop it or pick a free port with BAEBE_PRINTER_BRIDGE_PORT.`);
+  } else {
+    lines.push("INFO  Nothing listening yet — that is normal before the first start.");
+  }
+
+  console.log(lines.join("\n"));
+  process.exit(ready ? 0 : 1);
+}
+
+if (process.argv.includes("--doctor")) {
+  await doctor();
+}
+
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("Baebe Boo local printer connector. Runs on the till (not the server).");
+  console.log("");
+  console.log("  node local-printer-bridge.mjs [--doctor]");
+  console.log("");
+  console.log("  --doctor   Print a readiness report (node, port, CUPS, printers) and exit.");
+  console.log("  Env: BAEBE_PRINTER_BRIDGE_PORT (default 3210), BAEBE_PRINTER_ALLOWED_ORIGINS.");
+  process.exit(0);
+}
