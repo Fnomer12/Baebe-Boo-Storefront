@@ -83,6 +83,43 @@ async function code128Png(text: string): Promise<Buffer> {
   });
 }
 
+/** Wrap a title into a fixed label zone without letting it push later fields. */
+function wrapLabelText(value: string, maxCharacters: number, maxLines: number): string[] {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+
+  for (const rawWord of words) {
+    let word = rawWord;
+    while (word.length > maxCharacters) {
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      lines.push(word.slice(0, maxCharacters));
+      word = word.slice(maxCharacters);
+    }
+    if (!word) continue;
+
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxCharacters && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+
+  const truncated = lines.length > maxLines;
+  const visible = lines.slice(0, maxLines);
+  if (truncated && visible.length > 0) {
+    const last = visible.length - 1;
+    visible[last] = `${visible[last].slice(0, Math.max(0, maxCharacters - 1)).trimEnd()}…`;
+  }
+  return visible.length > 0 ? visible : [""];
+}
+
 /**
  * Render shelf labels, one exact-size page each.
  *
@@ -171,31 +208,64 @@ export async function renderShelfLabelsPdf(
         ellipsis: true,
       });
     } else {
-      // QR almost full-height on the left; text stacks on the right.
-      const qrSize = pageHeight - margin * 2;
-      const textX = margin + qrSize + 2.5 / MM_TO_PT;
+      // Landscape matches the physical reference: a compact QR on the left,
+      // readable product information on the right, and the barcode across the
+      // bottom. The title is explicitly wrapped and shortened before drawing
+      // so even very long catalogue names cannot collide with the price.
+      // 15mm gives the customer QR a materially larger scan target while
+      // still fitting the reference's left-side code zone.
+      const qrSize = 15 / MM_TO_PT;
+      const qrX = margin;
+      const qrY = 10.5;
+      const textX = margin + qrSize + 3 / MM_TO_PT;
       const textWidth = pageWidth - textX - margin;
-      doc.image(qr, margin, margin, { width: qrSize, height: qrSize });
+      doc.image(qr, qrX, qrY, { width: qrSize, height: qrSize });
 
-      let cursor = margin + 1;
-      const line = (text: string, size: number, font: "regular" | "bold", gapAfter = 1.2) => {
-        doc.font(font).fontSize(size).fillColor("#111111");
-        doc.text(text, textX, cursor, { width: textWidth, lineBreak: false, ellipsis: true });
-        cursor += size * 1.15 + gapAfter;
-      };
+      doc.font("bold").fontSize(5.5).fillColor("#111111");
+      doc.text(label.shopName.toUpperCase(), margin, 2.5, {
+        width: pageWidth - margin * 2,
+        lineBreak: false,
+        ellipsis: true,
+      });
+      doc.font("bold").fontSize(5.2).fillColor("#111111");
+      doc.text("SCAN QR", textX, qrY + 3, { width: textWidth, lineBreak: false, ellipsis: true });
+      doc.font("regular").fontSize(5.2).fillColor("#444444");
+      doc.text("OR PRODUCT", textX, qrY + 10, { width: textWidth, lineBreak: false, ellipsis: true });
 
-      line(label.shopName.toUpperCase(), 5.5, "bold");
-      doc.font("bold").fontSize(7.5).fillColor("#111111");
-      const nameHeight = doc.heightOfString(label.productName, { width: textWidth });
-      const nameLines = Math.min(2, Math.max(1, Math.round(nameHeight / (7.5 * 1.15))));
-      doc.text(label.productName, textX, cursor, { width: textWidth, height: 7.5 * 1.15 * nameLines, ellipsis: true });
-      cursor += 7.5 * 1.15 * nameLines + 1;
-      if (label.variantLabel) line(label.variantLabel, 6, "regular", 1);
-      doc.font("bold").fontSize(11.5).fillColor("#111111");
-      doc.text(formatCedis(label.price), textX, cursor, { width: textWidth, lineBreak: false });
-      cursor += 11.5 * 1.15 + 1;
-      doc.font("regular").fontSize(5.5).fillColor("#444444");
-      doc.text(label.sku, textX, cursor, { width: textWidth, lineBreak: false });
+      const dividerX = textX - 1.5 / MM_TO_PT;
+      doc.moveTo(dividerX, 11).lineTo(dividerX, 53).lineWidth(0.5).stroke("#999999");
+
+      const titleFontSize = label.productName.length > 64 ? 5.1 : label.productName.length > 42 ? 5.6 : 6.2;
+      const titleLineHeight = titleFontSize * 1.12;
+      const titleMaxCharacters = Math.max(14, Math.floor(textWidth / (titleFontSize * 0.52)));
+      const titleLines = wrapLabelText(label.productName, titleMaxCharacters, 2);
+      doc.font("bold").fontSize(titleFontSize).fillColor("#111111");
+      doc.text(titleLines.join("\n"), textX, 14, {
+        width: textWidth,
+        height: titleLineHeight * 2,
+        lineGap: 0,
+      });
+
+      const variantLines = wrapLabelText(label.variantLabel, Math.max(14, Math.floor(textWidth / (5.1 * 0.52))), 1);
+      doc.font("regular").fontSize(5.1).fillColor("#444444");
+      doc.text(variantLines[0] || "", textX, 31, { width: textWidth, lineBreak: false, ellipsis: true });
+
+      doc.font("bold").fontSize(10.2).fillColor("#111111");
+      doc.text(formatCedis(label.price), textX, 39, { width: textWidth, lineBreak: false, ellipsis: true });
+
+      const barcode = await code128Png(label.sku);
+      const barcodeY = pageHeight - margin - 6.5 / MM_TO_PT - 7;
+      doc.image(barcode, margin, barcodeY, {
+        width: pageWidth - margin * 2,
+        height: 6.5 / MM_TO_PT,
+      });
+      doc.font("regular").fontSize(4.5).fillColor("#444444");
+      doc.text(`SKU ${label.sku}`, margin, barcodeY + 7 / MM_TO_PT, {
+        width: pageWidth - margin * 2,
+        lineBreak: false,
+        ellipsis: true,
+        align: "center",
+      });
     }
   }
 

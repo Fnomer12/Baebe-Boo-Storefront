@@ -31,7 +31,7 @@ describe("native counter receipt jobs", () => {
     expect(job).not.toContain("₵");
   });
 
-  it("lays the sticker out landscape for 50x30mm stock by default", async () => {
+  it("uses the enlarged landscape QR, product and barcode zones", async () => {
     const { buildNativeLabelJob } = await import("./native-print");
     const job = buildNativeLabelJob([{
       shopName: "Baebe Boo",
@@ -43,13 +43,13 @@ describe("native counter receipt jobs", () => {
     }]).toString("ascii");
 
     expect(job).toContain("SIZE 50 mm,30 mm");
-    expect(job).toContain('QRCODE 8,26,L,2');
-    expect(job).toContain('TEXT 8,6,"0",0,1,1,"BAEBE BOO"');
-    expect(job).toContain('TEXT 112,30,"0",0,1,1,"SCAN QR"');
-    expect(job).toContain("GHS 189.00");
-    expect(job).toContain('BARCODE 8,182,"128",30,0,0,1,1');
+    expect(job).toContain('QRCODE 12,28,L,3');
+    expect(job).toContain('TEXT 16,8,"0",0,1,1,"BAEBE BOO"');
+    expect(job).toContain('TEXT 144,44,"0",0,1,1,"SCAN QR"');
+    expect(job).toContain('GHS 189.00');
+    expect(job).toContain('BARCODE 12,158,"128",36,0,0,2,2');
     expect(job).toContain("PRINT 1,1");
-    expect(job).not.toContain("SIZE 30 mm,50 mm");
+    expect(job).not.toContain('SIZE 30 mm,50 mm');
   });
 
   it("keeps every element inside the 50x30mm dot area", async () => {
@@ -68,6 +68,22 @@ describe("native counter receipt jobs", () => {
       expect(Number(match[2])).toBeLessThan(240);
     }
     expect(job).toContain("GHS 330.00");
+  });
+
+  it("shortens extremely long product names before the fixed price zone", async () => {
+    const { buildNativeLabelJob } = await import("./native-print");
+    const job = buildNativeLabelJob([{
+      shopName: "Baebe Boo",
+      productName: "A Very Long Product Name With Many Descriptive Words For Newborn Babies And Toddlers That Must Stay Inside The Sticker",
+      variantLabel: "Grey / Ivory / 6M",
+      price: 360,
+      sku: "BB-SEED-018-03",
+      url: "https://example.com/products/long-product?sku=BB-SEED-018-03",
+    }]).toString("ascii");
+
+    expect(job).toContain("...");
+    expect(job).toContain('TEXT 208,94,"0",0,2,2,"GHS 360.00"');
+    expect(job).toContain('BARCODE 12,158,"128",36,0,0,2,2');
   });
 
   it("still renders portrait for tills loaded with 30x50mm stock", async () => {
@@ -92,7 +108,7 @@ describe("native counter receipt jobs", () => {
 
     expect(job).toContain("SIZE 80 mm,160 mm");
     expect(job).toContain("COUNTER RECEIPT TEST");
-    expect(job).not.toContain("SIZE 30 mm,50 mm");
+    expect(job).not.toContain("SIZE 50 mm,30 mm");
   });
 
   it("builds the label test page landscape for 50x30mm stock", () => {

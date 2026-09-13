@@ -1,12 +1,13 @@
 import {
   Boxes,
+  KeyRound,
   PackageCheck,
   ReceiptText,
   ScanLine,
   type LucideIcon,
 } from "lucide-react";
 
-export const counterWorkspaceTabs = ["sell", "orders", "sales", "stock"] as const;
+export const counterWorkspaceTabs = ["sell", "orders", "sales", "stock", "password"] as const;
 
 export type CounterWorkspaceTab = (typeof counterWorkspaceTabs)[number];
 
@@ -46,6 +47,13 @@ export const counterWorkspaceRoutes: readonly CounterWorkspaceRoute[] = [
     description: "What is on the shelf right now",
     href: "/BaebeCounter/stock",
     icon: Boxes,
+  },
+  {
+    tab: "password",
+    label: "Change password",
+    description: "Update your counter password",
+    href: "/BaebeCounter/password",
+    icon: KeyRound,
   },
 ] as const;
 

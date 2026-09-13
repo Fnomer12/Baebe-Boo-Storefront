@@ -56,7 +56,7 @@ function variantLabel(optionValues: unknown, title: string): string {
 }
 
 /**
- * Shelf-label PDFs for the thermal printer (XP-365B, 30×50mm).
+ * Shelf-label PDFs for the thermal printer (XP-365B, 50×30mm).
  *
  * Read-only export gated on `catalog:read`: nothing is written, but the rows
  * carry internal SKUs. At most 200 stickers per request — a bigger catalogue

@@ -2,6 +2,7 @@ import {
   BookOpen,
   ClipboardList,
   Coins,
+  KeyRound,
   LayoutDashboard,
   Package,
   Percent,
@@ -23,6 +24,7 @@ export const adminWorkspaceTabs = [
   "stores",
   "delivery",
   "parenting",
+  "password",
 ] as const;
 
 export type AdminWorkspaceTab = (typeof adminWorkspaceTabs)[number];
@@ -105,6 +107,13 @@ export const adminWorkspaceRoutes: readonly AdminWorkspaceRoute[] = [
     description: "Parenting Hub articles",
     href: "/BaebeAdmin/parenting",
     icon: BookOpen,
+  },
+  {
+    tab: "password",
+    label: "Change password",
+    description: "Update your admin password",
+    href: "/BaebeAdmin/password",
+    icon: KeyRound,
   },
 ] as const;
 
