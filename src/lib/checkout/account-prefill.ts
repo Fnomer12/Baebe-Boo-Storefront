@@ -34,6 +34,8 @@ export type AddressSavePayload = {
 
 const GHANA_POST_PATTERN = /^[A-Z]{2,3}-\d{3,4}-\d{3,4}$/;
 
+import { normalizeGhanaPhoneCanonical } from "@/lib/phone";
+
 /**
  * The checkout phone field's digit pipeline as a pure function: strip
  * formatting, drop a 233 country prefix or leading 0, and accept only a full
@@ -41,12 +43,7 @@ const GHANA_POST_PATTERN = /^[A-Z]{2,3}-\d{3,4}-\d{3,4}$/;
  * validation then rejects — worse than leaving the field empty.
  */
 export function normalizeGhanaPhone(raw: string | null | undefined): string | null {
-  const digitsOnly = (raw ?? "").replace(/[^\d]/g, "");
-  let nationalNumber = digitsOnly;
-  if (nationalNumber.startsWith("233")) nationalNumber = nationalNumber.slice(3);
-  if (nationalNumber.startsWith("0")) nationalNumber = nationalNumber.slice(1);
-  if (nationalNumber.length !== 9) return null;
-  return `+233${nationalNumber}`;
+  return normalizeGhanaPhoneCanonical(raw);
 }
 
 /** One line for the checkout textarea, matching its "street, area, landmark" placeholder. */

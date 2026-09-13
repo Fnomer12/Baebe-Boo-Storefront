@@ -7,7 +7,7 @@ export default async function CollectionPage({ eyebrow, title, description, filt
   const catalog = demoCatalogEnabled ? fallbackProducts : await listStorefrontProducts();
   const visible = catalog.filter(filter);
   return (
-    <StorefrontPage>
+    <StorefrontPage showReadinessBanner>
       <div className="storefront-shell pb-20 pt-28 sm:pt-32">
         <PageIntro eyebrow={eyebrow} title={title} description={description} />
         <p className="mb-6 text-sm text-black/50">{visible.length} thoughtful picks</p>

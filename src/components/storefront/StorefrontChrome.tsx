@@ -7,10 +7,15 @@ import { whatsappUrl } from "@/lib/public-contact";
 
 export { whatsappUrl } from "@/lib/public-contact";
 
-export function StorefrontPage({ children, cartCount = 0 }: { children: React.ReactNode; cartCount?: number }) {
+/**
+ * Commerce-only readiness banner: `showReadinessBanner` defaults to false so
+ * only /store, product, category, compare, and checkout-related pages opt in.
+ * Sign-in, account, home, and content pages stay banner-free automatically.
+ */
+export function StorefrontPage({ children, cartCount = 0, showReadinessBanner = false }: { children: React.ReactNode; cartCount?: number; showReadinessBanner?: boolean }) {
   return (
     <main className="flex min-h-screen flex-col bg-[var(--color-cream)] text-[var(--color-ink)]">
-      <StoreReadinessBanner />
+      {showReadinessBanner ? <StoreReadinessBanner /> : null}
       <Navbar cartCount={cartCount} />
       {/* Grows so the footer sits at the bottom on short pages instead of leaving dead space beneath it. */}
       <div className="flex-1">{children}</div>

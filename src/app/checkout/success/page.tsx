@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, Clock3, PackageSearch, ShoppingBag, ReceiptText } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import StoreReadinessBanner from "@/components/storefront/StoreReadinessBanner";
 import { tryCreateServerSupabaseClient } from "@/lib/supabase/server";
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -48,6 +49,7 @@ export default async function CheckoutSuccessPage({
 
   return (
     <main className="min-h-screen bg-[#F8F5F0] text-black">
+      <StoreReadinessBanner />
       <Navbar cartCount={0} />
 
       <section className="px-3 pb-16 pt-24 sm:px-4 sm:pt-28 md:px-6 md:pt-32">

@@ -223,8 +223,9 @@ export default function FamilyProfileManager() {
             />
           </label>
           <label className="text-xs font-semibold">
-            Phone
-            <input className={inputClass} name="phone" type="tel" defaultValue={profile?.phone ?? ""} maxLength={20} />
+            Phone (SMS updates)
+            <input className={inputClass} name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+233" title="Ghana number starting with +233" defaultValue={profile?.phone ?? ""} maxLength={20} />
+            <span className="mt-1 block text-[11px] font-normal leading-4 text-black/50">We send order and delivery updates by SMS to this number.</span>
           </label>
           <label className="text-xs font-semibold">
             Date of birth

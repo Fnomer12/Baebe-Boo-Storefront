@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import StoreReadinessBanner from "@/components/storefront/StoreReadinessBanner";
 import { cartLineOptionSummary } from "@/domain/catalog/cart-line-options";
 import {
   buildAutoSaveAddressPayload,
@@ -12,6 +13,12 @@ import {
   normalizeGhanaPhone,
   type SavedAddressSummary,
 } from "@/lib/checkout/account-prefill";
+import {
+  formatGhanaPhoneInput,
+  GHANA_PHONE_ERROR,
+  GHANA_PHONE_HELPER,
+  normalizeGhanaPhoneCanonical,
+} from "@/lib/phone";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -118,6 +125,8 @@ export default function CheckoutPage() {
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("+233");
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const [smsConsent, setSmsConsent] = useState(true);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [digitalAddress, setDigitalAddress] = useState("");
   const [deliveryInstructions, setDeliveryInstructions] = useState("");
@@ -353,14 +362,11 @@ export default function CheckoutPage() {
   ]);
 
   const handlePhoneChange = (value: string) => {
-    const digitsOnly = value.replace(/[^\d]/g, "");
-    let nationalNumber = digitsOnly;
-
-    if (nationalNumber.startsWith("233")) nationalNumber = nationalNumber.slice(3);
-    if (nationalNumber.startsWith("0")) nationalNumber = nationalNumber.slice(1);
-
-    setCustomerPhone(`+233${nationalNumber.slice(0, 9)}`);
+    setPhoneTouched(true);
+    setCustomerPhone(formatGhanaPhoneInput(value));
   };
+
+  const phoneError = phoneTouched && !normalizeGhanaPhoneCanonical(customerPhone) ? GHANA_PHONE_ERROR : "";
 
   const validateCheckout = () => {
     if (!customerName.trim()) {
@@ -371,8 +377,9 @@ export default function CheckoutPage() {
       showMessage("Enter a valid email address.");
       return false;
     }
-    if (!customerPhone.startsWith("+233") || customerPhone.length !== 13) {
-      showMessage("Enter a valid Ghana number starting with +233.");
+    if (!normalizeGhanaPhoneCanonical(customerPhone)) {
+      setPhoneTouched(true);
+      showMessage(GHANA_PHONE_ERROR);
       return false;
     }
     if (fulfilmentType === "delivery" && !deliveryZoneId) {
@@ -419,7 +426,8 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           email: customerEmail.trim(),
           name: customerName.trim(),
-          phone: customerPhone.trim(),
+          phone: normalizeGhanaPhoneCanonical(customerPhone) ?? customerPhone.trim(),
+          smsConsent,
           deliveryAddress: fulfilmentType === "delivery" ? deliveryAddressForApi : "Click-and-collect",
           fulfilmentType,
           deliveryZoneId: fulfilmentType === "delivery" ? deliveryZoneId : undefined,
@@ -563,6 +571,7 @@ export default function CheckoutPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F5F0] text-black">
+      <StoreReadinessBanner />
       <Navbar cartCount={cartCount} />
 
       {message && (
@@ -760,18 +769,39 @@ export default function CheckoutPage() {
                       <input
                         value={customerName}
                         onChange={(event) => setCustomerName(event.target.value)}
-                        placeholder="Customer name"
+                        placeholder="Customer name *"
+                        required
+                        autoComplete="name"
+                        aria-label="Customer name (required)"
                         className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
                       />
                     </InputIcon>
-                    <InputIcon icon={<Phone size={18} />}>
-                      <input
-                        value={customerPhone}
-                        onChange={(event) => handlePhoneChange(event.target.value)}
-                        placeholder="+233 phone number"
-                        className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
-                      />
-                    </InputIcon>
+                    <div>
+                      <InputIcon icon={<Phone size={18} />}>
+                        <input
+                          value={customerPhone}
+                          onChange={(event) => handlePhoneChange(event.target.value)}
+                          onBlur={() => setPhoneTouched(true)}
+                          placeholder="Phone number * (+233)"
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          required
+                          aria-label="Phone number for SMS updates (required)"
+                          aria-describedby="checkout-phone-helper"
+                          aria-invalid={phoneError ? true : undefined}
+                          className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
+                        />
+                      </InputIcon>
+                      <p id="checkout-phone-helper" className="mt-1.5 px-2 text-xs leading-5 text-black/55">
+                        {GHANA_PHONE_HELPER}
+                      </p>
+                      {phoneError ? (
+                        <p role="alert" className="mt-1 px-2 text-xs font-semibold text-red-700">
+                          {phoneError}
+                        </p>
+                      ) : null}
+                    </div>
                     <div className="sm:col-span-2">
                       <InputIcon icon={<Mail size={18} />}>
                         <input
@@ -779,10 +809,23 @@ export default function CheckoutPage() {
                           onChange={(event) => setCustomerEmail(event.target.value)}
                           placeholder="Customer email"
                           type="email"
+                          autoComplete="email"
                           className="h-14 w-full rounded-full border border-black/10 bg-white/90 pl-12 pr-5 outline-none"
                         />
                       </InputIcon>
                     </div>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-[#F8F5F0] p-4 text-sm leading-6 text-black/70 sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        checked={smsConsent}
+                        onChange={(event) => setSmsConsent(event.target.checked)}
+                        className="mt-1 h-4 w-4 shrink-0 accent-black"
+                      />
+                      <span>
+                        Send me order updates and family offers by SMS/WhatsApp.{" "}
+                        <span className="text-black/50">You can opt out at any time.</span>
+                      </span>
+                    </label>
                   </div>
                 </section>
 

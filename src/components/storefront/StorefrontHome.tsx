@@ -86,7 +86,7 @@ export default async function StorefrontHome() {
   });
 
   return (
-    <StorefrontPage>
+    <StorefrontPage showReadinessBanner={false}>
       <div className="storefront-shell storefront-home space-y-16 pb-20 pt-24 sm:space-y-24 sm:pt-28">
         <section className={`storefront-hero-banner storefront-hero-v${HERO_VARIANT}`}>
           <img className="storefront-hero-bg" src="/hero/mother-child.jpg" alt="A mother holding her baby close in a softly lit nursery" width={1792} height={1024} />

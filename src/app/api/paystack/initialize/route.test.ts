@@ -258,4 +258,20 @@ describe("paystack initialize", () => {
 
     expect(deliveryFeesWritten()).toEqual([0]);
   });
+
+  it("rejects a non-Ghana phone number with an SMS-ready message", async () => {
+    const response = await POST(checkoutRequest({ phone: "+1 555 123 4567" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.message).toMatch(/Ghana number/i);
+    expect(inserts.orders || []).toHaveLength(0);
+  });
+
+  it("normalizes a local 0... number to +233 before storing", async () => {
+    const response = await POST(checkoutRequest({ phone: "0241234567" }));
+
+    expect(response.status).toBe(200);
+    expect((inserts.orders?.[0] as { customer_phone: string }).customer_phone).toBe("+233241234567");
+  });
 });

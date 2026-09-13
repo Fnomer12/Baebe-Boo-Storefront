@@ -1,6 +1,7 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { isStaffCustomerEmail } from "@/lib/auth/staff-customers";
 
 export type ProfitSummary = {
   revenue: number;
@@ -166,7 +167,29 @@ export async function loadTopCustomers(limit = 20): Promise<TopCustomerRow[]> {
 
   if (error) throw new Error(error.message);
 
-  return (data || []).map((row) => ({
+  // Till logins own customer_profiles rows via the bootstrap trigger and the
+  // view has no staff filter — drop them here so staff never rank as
+  // customers. Over-fetch is unnecessary: staff rows are rare, and the limit
+  // only trims a genuine customer in the pathological all-staff case.
+  let staffUserIds = new Set<string>();
+  try {
+    const { data: staff } = await supabaseAdmin
+      .from("shop_staff")
+      .select("auth_user_id")
+      .not("auth_user_id", "is", null);
+    staffUserIds = new Set(
+      (staff || []).map((row) => String((row as { auth_user_id: unknown }).auth_user_id || "")).filter(Boolean),
+    );
+  } catch {
+    staffUserIds = new Set();
+  }
+
+  return (data || [])
+    .filter(
+      (row) =>
+        !staffUserIds.has(String(row.user_id)) && !isStaffCustomerEmail(String(row.email || "")),
+    )
+    .map((row) => ({
     userId: String(row.user_id),
     customerName: String(row.customer_name || ""),
     email: String(row.email || ""),

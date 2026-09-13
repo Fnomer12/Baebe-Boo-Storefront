@@ -66,7 +66,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const details = detailRows(product);
 
   return (
-    <StorefrontPage>
+    <StorefrontPage showReadinessBanner>
       <div className="storefront-shell pb-20 pt-28 sm:pt-32">
         <nav aria-label="Breadcrumb" className="mb-7 flex items-center gap-2 text-xs text-black/45">
           <Link href="/store" className="hover:text-black">Shop</Link>

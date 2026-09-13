@@ -1,6 +1,7 @@
 import "server-only";
 
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
+import { isStaffCustomerEmail } from "@/lib/auth/staff-customers";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { completeCounterSale } from "@/domain/counter/sale";
 import { quoteCheckoutPromotions } from "@/lib/checkout/promotions";
@@ -309,12 +310,33 @@ export async function recordCounterSale(
 }
 
 /**
+ * Staff accounts must never own orders or loyalty: the bootstrap trigger
+ * gives every till login a customer_profiles row, so an explicit check is
+ * the only thing stopping a sale from being attached to a cashier.
+ * Best-effort and fail-closed: on lookup failure the link is skipped rather
+ * than risk crediting a staff account.
+ */
+async function isStaffAccount(userId: string): Promise<boolean> {
+  try {
+    const [{ data: staff }, { data: profile }] = await Promise.all([
+      supabaseAdmin.from("shop_staff").select("id").eq("auth_user_id", userId).limit(1),
+      supabaseAdmin.from("customer_profiles").select("email").eq("user_id", userId).maybeSingle(),
+    ]);
+    if (staff && staff.length > 0) return true;
+    return isStaffCustomerEmail((profile as { email?: string | null } | null)?.email);
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Attach an account holder to a till sale so order history + loyalty follow
  * them. Only ever from the member lookup (a UUID), never free text.
  */
 async function linkCounterCustomer(orderId: string, customerUserId?: string | null) {
   if (!customerUserId) return;
   try {
+    if (await isStaffAccount(customerUserId)) return;
     const { data: profile } = await supabaseAdmin
       .from("customer_profiles")
       .select("user_id")
@@ -411,6 +433,7 @@ async function applyCounterPromotions(orderId: string) {
  */
 async function earnCounterLoyalty(orderId: string, customerUserId?: string | null) {
   if (!customerUserId) return;
+  if (await isStaffAccount(customerUserId)) return;
   try {
     const { data: rule } = await supabaseAdmin
       .from("loyalty_rules")

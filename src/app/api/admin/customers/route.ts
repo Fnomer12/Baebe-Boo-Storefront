@@ -15,6 +15,7 @@ import {
   type AdminCustomer,
   type AdminCustomerChild,
 } from "@/domain/admin-customers";
+import { excludeStaffMembers, excludeStaffProfiles } from "@/lib/auth/staff-customers";
 import { loadMembers } from "./_customer-record";
 
 /**
@@ -41,6 +42,12 @@ export async function GET() {
   } catch {
     return NextResponse.json({ message: "Customers could not be loaded." }, { status: 500 });
   }
+
+  // Till logins are provisioned as auth users, so the bootstrap trigger gives
+  // every cashier a customer_profiles row. Staff must not count as customers.
+  const staffUserIds = await loadStaffUserIds();
+  profiles = excludeStaffProfiles(profiles, staffUserIds);
+  members = excludeStaffMembers(members, staffUserIds);
 
   const userIds = profiles.map((profile) => profile.user_id);
   const [children, rewards, spend] = await Promise.all([
@@ -269,6 +276,30 @@ async function loadProfiles(): Promise<ProfileListRow[]> {
   }
 
   return rows;
+}
+
+/**
+ * Auth accounts linked from `shop_staff`: the synthetic till logins whose
+ * customer_profiles rows must not count as customers. Best-effort — if the
+ * lookup fails the email-domain filter in `excludeStaffProfiles` still
+ * catches provisioned addresses, so a staff-table outage never breaks the
+ * customer screen.
+ */
+async function loadStaffUserIds(): Promise<Set<string>> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("shop_staff")
+      .select("auth_user_id")
+      .not("auth_user_id", "is", null);
+    if (error) return new Set();
+    return new Set(
+      (data || [])
+        .map((row) => String((row as { auth_user_id: unknown }).auth_user_id || ""))
+        .filter(Boolean),
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 async function loadChildren(userIds: readonly string[]): Promise<Map<string, ChildRow[]>> {

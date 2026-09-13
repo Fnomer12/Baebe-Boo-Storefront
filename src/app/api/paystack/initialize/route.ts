@@ -5,6 +5,7 @@ import {
   parseCheckoutItems,
   resolveCheckoutBasket,
 } from "@/lib/checkout/resolve-basket";
+import { normalizeGhanaPhoneCanonical } from "@/lib/phone";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireServerEnv } from "@/lib/server-env";
 import { STORE_NOT_READY_MESSAGE, isStoreReady } from "@/lib/store-readiness";
@@ -52,10 +53,11 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { email, name, phone, deliveryAddress, shopId, preferredShopId, items, deliveryZoneId, fulfilmentType, promotionCode, voucherCode } = body as {
+    const { email, name, phone, smsConsent, deliveryAddress, shopId, preferredShopId, items, deliveryZoneId, fulfilmentType, promotionCode, voucherCode } = body as {
       email?: unknown;
       name?: unknown;
       phone?: unknown;
+      smsConsent?: unknown;
       deliveryAddress?: unknown;
       shopId?: unknown;
       preferredShopId?: unknown;
@@ -68,12 +70,13 @@ export async function POST(req: Request) {
 
     const chosenFulfilment = fulfilmentType === "pickup" ? "pickup" : "delivery";
 
+    const normalizedPhone = typeof phone === "string" ? normalizeGhanaPhoneCanonical(phone) : null;
+
     if (
       typeof email !== "string" ||
       !emailPattern.test(email) ||
       typeof name !== "string" ||
       !name.trim() ||
-      typeof phone !== "string" ||
       typeof deliveryAddress !== "string" ||
       (chosenFulfilment === "delivery" && !deliveryAddress.trim()) ||
       (chosenFulfilment === "delivery" && typeof deliveryZoneId !== "string") ||
@@ -81,9 +84,14 @@ export async function POST(req: Request) {
       (shopId !== undefined && shopId !== null && typeof shopId !== "string") ||
       (preferredShopId !== undefined && preferredShopId !== null && typeof preferredShopId !== "string") ||
       (promotionCode !== undefined && promotionCode !== null && typeof promotionCode !== "string") ||
-      (voucherCode !== undefined && voucherCode !== null && typeof voucherCode !== "string")
+      (voucherCode !== undefined && voucherCode !== null && typeof voucherCode !== "string") ||
+      (smsConsent !== undefined && typeof smsConsent !== "boolean")
     ) {
       return errorResponse("Invalid checkout details.");
+    }
+
+    if (!normalizedPhone) {
+      return errorResponse("Enter a valid Ghana number starting with +233.");
     }
 
     if (!isSupabaseAdminConfigured) {
@@ -150,11 +158,11 @@ export async function POST(req: Request) {
       .from("orders")
       .insert({
         order_number: orderNumber,
-        customer_name: name.trim(),
-        customer_email: email.trim().toLowerCase(),
-        customer_phone: phone.trim(),
+        customer_name: (name as string).trim(),
+        customer_email: (email as string).trim().toLowerCase(),
+        customer_phone: normalizedPhone,
         customer_user_id: authData?.user?.id || null,
-        delivery_address: chosenFulfilment === "delivery" ? deliveryAddress.trim() : "Click-and-collect",
+        delivery_address: chosenFulfilment === "delivery" ? (deliveryAddress as string).trim() : "Click-and-collect",
         shop_id: primaryShopId,
         total_amount: total,
         voucher_code: typeof voucherCode === "string" && voucherCode.trim() ? voucherCode.trim() : null,
@@ -295,7 +303,14 @@ export async function POST(req: Request) {
         amount: amountInPesewas,
         currency: "GHS",
         channels: ["card", "mobile_money", "bank_transfer"],
-        metadata: { name, phone, order_id: order.id, order_number: order.order_number, reservation_id: reservationId },
+        metadata: {
+          name,
+          phone: normalizedPhone,
+          sms_consent: smsConsent === true,
+          order_id: order.id,
+          order_number: order.order_number,
+          reservation_id: reservationId,
+        },
       }),
     });
     const data = await res.json();
@@ -307,6 +322,25 @@ export async function POST(req: Request) {
     }
     const reference: string = data.data.reference;
     const accessCode: string = data.data.access_code;
+
+    // Record explicit SMS consent for signed-in customers without ever
+    // blocking payment: consent storage must not fail checkout.
+    if (smsConsent === true && authData?.user?.id) {
+      try {
+        await supabaseAdmin.from("customer_consents").insert({
+          user_id: authData.user.id,
+          email: typeof email === "string" ? email.trim().toLowerCase() : null,
+          phone: normalizedPhone,
+          purpose: "order-updates",
+          channel: "sms",
+          status: "granted",
+          policy_version: "2026-07-21",
+          source: "checkout",
+        });
+      } catch {
+        // Consent is best-effort; the order and payment already succeeded.
+      }
+    }
 
     await Promise.all([
       supabaseAdmin.from("orders").update({ payment_reference: reference }).eq("id", order.id),

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
+import StoreReadinessBanner from "@/components/storefront/StoreReadinessBanner";
 import { cartLineOptionSummary, cartLineSignature } from "@/domain/catalog/cart-line-options";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import {
@@ -184,6 +185,7 @@ export default function CartPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F5F0] text-black">
+      <StoreReadinessBanner />
       <Navbar cartCount={cartCount} />
 
       {message && (

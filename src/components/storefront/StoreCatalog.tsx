@@ -170,7 +170,7 @@ export default function StoreCatalog({ initialQuery, initialSort }: { initialQue
   }
 
   return (
-    <StorefrontPage>
+    <StorefrontPage showReadinessBanner>
       <div className="storefront-shell pb-20 pt-28 sm:pt-32">
         <PageIntro eyebrow="The Baebe Boo shop" title="Good things for growing little people." description="Browse our national collection, then choose a convenient store when you are ready to confirm availability and add to your bag." />
         <div className="storefront-catalog-toolbar">

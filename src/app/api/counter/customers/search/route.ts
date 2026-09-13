@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authorizeCounterApi } from "@/lib/auth";
+import { excludeStaffProfiles } from "@/lib/auth/staff-customers";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
@@ -26,12 +27,36 @@ export async function GET(request: Request) {
   if (error) {
     return NextResponse.json({ message: "Lookup failed." }, { status: 500 });
   }
+  // Till logins have customer_profiles rows via the bootstrap trigger — a
+  // cashier looking up their own name must not be able to attach the sale or
+  // loyalty to a staff account.
+  let staffUserIds = new Set<string>();
+  try {
+    const { data: staff } = await supabaseAdmin
+      .from("shop_staff")
+      .select("auth_user_id")
+      .not("auth_user_id", "is", null);
+    staffUserIds = new Set(
+      (staff || []).map((row) => String((row as { auth_user_id: unknown }).auth_user_id || "")).filter(Boolean),
+    );
+  } catch {
+    staffUserIds = new Set();
+  }
+  const visible = excludeStaffProfiles(
+    (data || []).map((row) => ({
+      user_id: String(row.user_id),
+      email: (row.email as string | null) || null,
+      full_name: row.full_name,
+      phone: row.phone,
+    })),
+    staffUserIds,
+  );
   return NextResponse.json({
-    customers: (data || []).map((row) => ({
+    customers: visible.map((row) => ({
       userId: row.user_id,
-      name: row.full_name || "Account holder",
-      email: row.email || null,
-      phone: row.phone || null,
+      name: (row.full_name as string | null) || "Account holder",
+      email: (row.email as string | null) || null,
+      phone: (row.phone as string | null) || null,
     })),
   });
 }

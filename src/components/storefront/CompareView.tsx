@@ -119,7 +119,7 @@ export default function CompareView() {
   ];
 
   return (
-    <StorefrontPage>
+    <StorefrontPage showReadinessBanner>
       <div className="storefront-shell pb-20 pt-28 sm:pt-32">
         <PageIntro eyebrow="Compare products" title="Side by side, made simple." description="Your shortlist, lined up next to each other so you can choose with confidence. You can compare up to four products at a time." />
         <p role="status" aria-live="polite" className="mb-4 min-h-5 text-sm font-medium text-[#396347]">{message}</p>
