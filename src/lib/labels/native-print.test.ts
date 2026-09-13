@@ -31,7 +31,7 @@ describe("native counter receipt jobs", () => {
     expect(job).not.toContain("₵");
   });
 
-  it("uses the enlarged landscape QR, product and barcode zones", async () => {
+  it("keeps the enlarged landscape QR separate from a bounded text column", async () => {
     const { buildNativeLabelJob } = await import("./native-print");
     const job = buildNativeLabelJob([{
       shopName: "Baebe Boo",
@@ -45,7 +45,8 @@ describe("native counter receipt jobs", () => {
     expect(job).toContain("SIZE 50 mm,30 mm");
     expect(job).toContain('QRCODE 12,28,L,3');
     expect(job).toContain('TEXT 16,8,"0",0,1,1,"BAEBE BOO"');
-    expect(job).toContain('TEXT 144,44,"0",0,1,1,"SCAN QR"');
+    expect(job).toContain('BAR 198,12,1,128');
+    expect(job).toContain('TEXT 210,8,"0",0,1,1,"SCAN QR"');
     expect(job).toContain('GHS 189.00');
     expect(job).toContain('BARCODE 12,158,"128",36,0,0,2,2');
     expect(job).toContain("PRINT 1,1");
@@ -82,7 +83,7 @@ describe("native counter receipt jobs", () => {
     }]).toString("ascii");
 
     expect(job).toContain("...");
-    expect(job).toContain('TEXT 208,94,"0",0,2,2,"GHS 360.00"');
+    expect(job).toContain('TEXT 210,87,"0",0,2,2,"GHS 360.00"');
     expect(job).toContain('BARCODE 12,158,"128",36,0,0,2,2');
   });
 

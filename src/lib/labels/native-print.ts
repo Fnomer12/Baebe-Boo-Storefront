@@ -73,22 +73,24 @@ export function buildNativeLabelJob(labels: ShelfLabel[], sizeId: LabelSizeId = 
   ];
 
   for (const label of labels) {
-    // The reference sticker is landscape: the larger QR owns the left third,
-    // while product information gets a bounded right-hand column. Keep the
-    // title inside three lines and add an ASCII ellipsis when even that is not
-    // enough; the price and machine codes must never be pushed off-label.
-    const productLines = wrap(label.productName, 22, 3);
-    const variantLines = wrap(label.variantLabel, 22, 1);
+    // Keep the QR and barcode in dedicated machine-readable zones. The XP-365B
+    // default font is wider than a proportional UI font, so the right column
+    // must be wrapped to a real dot-width budget rather than a generous-looking
+    // character count. This prevents long names from clipping at the label edge.
+    const rightX = 210;
+    const productLines = wrap(label.productName, 15, 3);
+    const variantLines = wrap(label.variantLabel, 15, 1);
     const skuLines = fixedLines(`SKU ${label.sku}`, 46, 1);
+    const variantY = 24 + productLines.length * 15 + 2;
+    const priceY = variantY + 16;
     commands.push(
       tsplText(16, 8, label.shopName.toUpperCase(), 32),
       `QRCODE 12,28,L,3,A,0,"${ascii(label.url, 220)}"`,
-      tsplText(144, 44, "SCAN QR", 14),
-      tsplText(144, 60, "OR PRODUCT", 16),
-      `BAR 198,8,1,126`,
-      ...productLines.map((line, index) => tsplText(208, 14 + index * 16, line, 22)),
-      ...variantLines.map((line, index) => tsplText(208, 68 + index * 14, line, 22)),
-      tsplText(208, 94, priceText(label.price), 22, 2),
+      `BAR 198,12,1,128`,
+      tsplText(rightX, 8, "SCAN QR", 10),
+      ...productLines.map((line, index) => tsplText(rightX, 24 + index * 15, line, 15)),
+      ...variantLines.map((line, index) => tsplText(rightX, variantY + index * 14, line, 15)),
+      tsplText(rightX, priceY, priceText(label.price), 12, 2),
       `BARCODE 12,158,"128",36,0,0,2,2,"${ascii(label.sku, 40)}"`,
       ...skuLines.map((line, index) => tsplText(12, 208 + index * 14, line, 46)),
       "PRINT 1,1",
@@ -148,11 +150,11 @@ export function buildNativeCalibrationJob(sizeId: LabelSizeId = "50x30"): Buffer
     "CLS",
     `BOX 8,8,392,232,2`,
     `QRCODE 12,28,L,3,A,0,"https://baebe-boo.jtechinnovations.tech/products/calibration-test?sku=TEST-SKU"`,
-    tsplText(144, 44, "SCAN QR", 14),
-    tsplText(144, 60, "OR PRODUCT", 16),
-    `BAR 198,8,1,126`,
-    tsplText(208, 16, "50 x 30 MM TEST", 22),
-    tsplText(208, 48, "GHS 123.45", 22, 1),
+    `BAR 198,12,1,128`,
+    tsplText(210, 8, "SCAN QR", 10),
+    tsplText(210, 24, "50 x 30 MM", 15),
+    tsplText(210, 40, "TEST LABEL", 15),
+    tsplText(210, 72, "GHS 123.45", 12, 2),
     `BARCODE 12,158,"128",36,0,0,2,2,"TEST-SKU-123"`,
     tsplText(12, 208, "SKU TEST-SKU-123", 46),
     "PRINT 1,1",
