@@ -508,3 +508,79 @@ export function staffLoginRedirectTemplate(): { subject: string; html: string } 
 export function staffLoginRedirectSmsTemplate(): string {
   return "Baebe Boo: this address uses the staff portal. No customer sign-in code was issued.";
 }
+
+export type OrderStatusKey =
+  | "processing"
+  | "dispatched"
+  | "shipped"
+  | "delivered"
+  | "completed"
+  | "cancelled"
+  | "refunded";
+
+const ORDER_STATUS_COPY: Record<OrderStatusKey, { headline: string; detail: string; sms: string }> = {
+  processing: {
+    headline: "We are preparing your order",
+    detail: "Your order is being packed and will be on its way soon.",
+    sms: "is being prepared",
+  },
+  dispatched: {
+    headline: "Your order is on its way",
+    detail: "Your order has left our shop and is heading to you.",
+    sms: "is on its way",
+  },
+  shipped: {
+    headline: "Your order has shipped",
+    detail: "Your order is with the courier and tracking toward delivery.",
+    sms: "has shipped",
+  },
+  delivered: {
+    headline: "Your order was delivered",
+    detail: "Your order has arrived. We hope you love it.",
+    sms: "was delivered",
+  },
+  completed: {
+    headline: "Your order is complete",
+    detail: "Your order is complete. Thank you for shopping with Baebe Boo.",
+    sms: "is complete",
+  },
+  cancelled: {
+    headline: "Your order was cancelled",
+    detail: "Your order was cancelled. If you already paid, our team will be in touch about your refund.",
+    sms: "was cancelled",
+  },
+  refunded: {
+    headline: "Your order was refunded",
+    detail: "Your refund for this order has been processed.",
+    sms: "was refunded",
+  },
+};
+
+/** Email + SMS copy for an order status change. Best-effort: never throws. */
+export function orderStatusTemplate(
+  status: OrderStatusKey,
+  order: { orderNumber?: string | null; customerName?: string | null },
+): { subject: string; html: string } {
+  const copy = ORDER_STATUS_COPY[status];
+  const greeting = order.customerName ? `Hi ${escapeHtml(order.customerName)},` : "Hi there,";
+  const reference = order.orderNumber ? ` #${escapeHtml(order.orderNumber)}` : "";
+  const body = `
+    <p style="${TEXT}">${greeting}</p>
+    <p style="${TEXT_LEAD}">${copy.headline}${reference}.</p>
+    <p style="${TEXT}">${copy.detail}</p>
+    <p style="text-align:center;margin:32px 0;">${button(siteUrl("/store"), "Continue shopping")}</p>
+  `;
+  return {
+    subject: `Your Baebe Boo order${order.orderNumber ? ` #${order.orderNumber}` : ""}: ${copy.headline.toLowerCase()}`,
+    html: wrap(copy.headline, body, `${copy.headline}${reference}.`),
+  };
+}
+
+/** Compact order status copy for the SMS channel. */
+export function orderStatusSmsTemplate(
+  status: OrderStatusKey,
+  order: { orderNumber?: string | null },
+): string {
+  const reference = order.orderNumber ? ` #${order.orderNumber}` : "";
+  return `Baebe Boo: Order${reference} ${ORDER_STATUS_COPY[status].sms}.`;
+}

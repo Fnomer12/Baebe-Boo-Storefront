@@ -71,6 +71,14 @@ export async function finalizeVerifiedOrder(orderId: string, providerReference: 
       reason: confirmation.smsError,
     });
   }
+  if (confirmation.status === "skipped") {
+    // Skipped is the invisible outcome: both callers discard it, so a
+    // verify-vs-webhook race loser or a missing-contact order vanishes.
+    console.error("finalizeVerifiedOrder: order confirmation skipped", {
+      orderId,
+      reason: confirmation.reason,
+    });
+  }
 
   // The order is now paid and counted in `orders`, but the profit report reads
   // a materialized snapshot — without this the dashboard reports revenue the

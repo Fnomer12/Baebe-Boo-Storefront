@@ -110,6 +110,14 @@ export async function requestLoginCode(email: string, requestIp: string | null):
   const emailDelivered = emailDelivery.sent && !emailDelivery.simulated;
   const smsDelivered = smsDelivery.sent && !smsDelivery.simulated;
   if (!emailDelivered && !smsDelivered) {
+    // Both channels failed or simulated: the caller only sees a 503, so log
+    // the provider reasons here or every outage looks like "all sign-ins down"
+    // with nothing to distinguish Resend from FROG.
+    console.error("requestLoginCode: no delivery channel succeeded", {
+      requestId,
+      emailError: !emailDelivery.sent ? emailDelivery.error : "Email delivery was simulated.",
+      smsError: !smsDelivery.sent ? smsDelivery.error : "SMS delivery was simulated.",
+    });
     await invalidate(requestId);
     return { status: "unavailable" };
   }

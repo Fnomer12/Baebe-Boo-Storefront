@@ -381,6 +381,14 @@ export async function resendOrderReceipt(orderId: string): Promise<ConfirmationO
         .update({ confirmation_email_sent_at: new Date().toISOString() })
         .eq("id", orderId);
     }
+    // Same for SMS: without this the SMS column stays null forever on a
+    // manual resend, and the next retry looks like it never sent.
+    if (smsSent) {
+      await supabaseAdmin
+        .from("orders")
+        .update({ confirmation_sms_sent_at: new Date().toISOString() })
+        .eq("id", orderId);
+    }
 
     return {
       status: "sent",
